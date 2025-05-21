@@ -42,7 +42,7 @@ export function initScene() {
     scene.environment = pmremGenerator.fromScene(darkEnvScene, 0.1).texture;
 
     // Ambient Light - Jaga agar tidak terlalu tinggi agar efek neon & debug ray lebih terlihat
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3); // Coba 0.2 - 0.4
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Coba 0.2 - 0.4
     scene.add(ambientLight);
 
     window.addEventListener('resize', onWindowResize, false);
