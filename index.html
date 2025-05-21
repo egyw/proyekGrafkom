@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyek Grafika Komputer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="blocker">
+        <div id="instructions">
+            <span style="font-size:36px">Klik untuk Bermain</span>
+            <br /><br />
+            Gerak: W, A, S, D<br/>
+            Lihat: Mouse<br/>
+            Lompat: Spasi (jika diimplementasikan)<br/>
+            Lari: Shift (jika diimplementasikan)
+        </div>
+    </div>
+    <div id="webgl-container"></div>
+
+    <!-- Three.js CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <!-- Skrip Modular Proyek -->
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
