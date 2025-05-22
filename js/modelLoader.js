@@ -1,84 +1,222 @@
 // js/modelLoader.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { camera } from './sceneSetup.js';
 
-const loader = new GLTFLoader();
 export const loadedModels = new Map();
-export let collidableMeshes = [];
+export const collidableMeshes = [];
+export const dynamicDoors = new Map(); // Key: doorWayMeshName dari config, Value: { doorMesh, interactionTargetMesh }
 
-export function loadGLBModel(modelConfig, scene) {
+const gltfLoader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
+let sharedDoorMaterial;
+
+async function initializeDoorMaterial(texturePath) {
+    if (sharedDoorMaterial) return;
+    console.log(`[MatInit] Mencoba inisialisasi material pintu dengan path: "${texturePath}"`);
+    if (texturePath) {
+        try {
+            const texture = await textureLoader.loadAsync(texturePath);
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
+            sharedDoorMaterial = new THREE.MeshStandardMaterial({
+                map: texture, metalness: 0.7, roughness: 0.5, side: THREE.DoubleSide
+            });
+            console.log("[MatInit] Tekstur pintu berhasil dimuat:", texturePath);
+        } catch (error) {
+            console.warn(`[MatInit] Gagal memuat tekstur pintu dari "${texturePath}". Menggunakan warna solid. Error:`, error.message);
+            sharedDoorMaterial = new THREE.MeshStandardMaterial({ color: 0x6c757d, metalness: 0.8, roughness: 0.4, side: THREE.DoubleSide });
+        }
+    } else {
+        console.log("[MatInit] Tidak ada path tekstur pintu. Menggunakan warna solid.");
+        sharedDoorMaterial = new THREE.MeshStandardMaterial({ color: 0x6c757d, metalness: 0.8, roughness: 0.4, side: THREE.DoubleSide });
+    }
+}
+
+export async function loadGLBModel(modelConfig, scene) {
+    const doorMainConfig = modelConfig.dynamicDoorConfig;
+    if (doorMainConfig && doorMainConfig.doorTexturePath) {
+        await initializeDoorMaterial(doorMainConfig.doorTexturePath);
+    }
+
     return new Promise((resolve, reject) => {
-        // BARIS DEBUG 1 (Bisa dikomentari/dihapus)
-        // console.log(`Loading model: ${modelConfig.id} from ${modelConfig.path}`); 
-        
-        loader.load(
-            modelConfig.path,
-            (gltf) => {
-                const model = gltf.scene;
-                const animations = gltf.animations;
-                model.name = modelConfig.id;
+        gltfLoader.load( modelConfig.path, (gltf) => {
+            const model = gltf.scene; model.name = modelConfig.id;
+            if (modelConfig.position) model.position.set(...modelConfig.position);
+            if (modelConfig.rotation) model.rotation.set(...modelConfig.rotation.map(THREE.MathUtils.degToRad));
+            if (modelConfig.scale) model.scale.set(...modelConfig.scale);
+            let mixer = null; if (gltf.animations && gltf.animations.length > 0) mixer = new THREE.AnimationMixer(model);
+            const currentModelCollidables = []; // Akan diisi oleh pintu dan mesh lain
 
-                // BARIS DEBUG 2 (Bisa dikomentari/dihapus)
-                // console.log(`--- Meshes in ${modelConfig.id} (${modelConfig.path}) ---`); 
-
-                if (modelConfig.position) model.position.set(...modelConfig.position);
-                if (modelConfig.rotation) model.rotation.set(...modelConfig.rotation.map(r => THREE.MathUtils.degToRad(r)));
-                if (modelConfig.scale) model.scale.set(...modelConfig.scale);
-
-                let mixer = null;
-                if (animations && animations.length) {
-                    mixer = new THREE.AnimationMixer(model);
-                }
-
-                model.traverse(function (child) {
-                    // BARIS DEBUG UTAMA (Bisa dikomentari/dihapus)
-                    // console.log(`Node Name: "${child.name}", Type: ${child.type}, IsMesh: ${child.isMesh}`);
+            // Proses pembuatan pintu dinamis berdasarkan doorInstances dari config
+            if (doorMainConfig && doorMainConfig.doorInstances && doorMainConfig.doorInstances.length > 0) {
+                console.log(`[ModelLoader] Akan membuat pintu dinamis berdasarkan ${doorMainConfig.doorInstances.length} instance dari config.`);
+                doorMainConfig.doorInstances.forEach(doorInstanceConfig => {
+                    const doorWayNameKey = doorInstanceConfig.doorWayMeshName; // ID unik untuk pintu ini
+                    if (!doorWayNameKey) {
+                        console.error("[ModelLoader] KRITIS: doorInstanceConfig tidak memiliki doorWayMeshName!", doorInstanceConfig);
+                        return; // Lewati instance ini jika tidak ada ID
+                    }
+                    console.log(`[ModelLoader] Memproses instance pintu untuk kunci: ${doorWayNameKey}`);
+                    const fullDoorSetup = { ...doorMainConfig, ...doorInstanceConfig }; // Gabungkan config umum & spesifik
+                    createDynamicDoor(doorWayNameKey, fullDoorSetup, scene, currentModelCollidables);
                     
-                    if (child.isMesh) {
-                        // BARIS DEBUG TAMBAHAN (Bisa dikomentari/dihapus jika ada)
-                        // console.log(`  -> Found MESH: "${child.name}"`);
-
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-                        collidableMeshes.push(child);
-
-                        if (child.material) {
-                            const applyMaterialTweaks = (material, meshNode) => {
-                                if (modelConfig.doubleSidedMeshNames && modelConfig.doubleSidedMeshNames.includes(meshNode.name)) {
-                                    material.side = THREE.DoubleSide;
-                                    // BARIS DEBUG 4 (Bisa dikomentari/dihapus)
-                                    // console.log(`    Applied DoubleSide to MESH: "${meshNode.name}"`);
-                                } else {
-                                    material.side = THREE.FrontSide;
-                                    // BARIS DEBUG 5 (Bisa dikomentari/dihapus)
-                                    // console.log(`    Applied FrontSide to MESH: "${meshNode.name}"`);
-                                }
-
-                                material.transparent = false;
-                                material.depthWrite = true;
-                                material.blending = THREE.NormalBlending;
-                            };
-
-                            if (Array.isArray(child.material)) {
-                                child.material.forEach(mat => applyMaterialTweaks(mat, child));
-                            } else {
-                                applyMaterialTweaks(child.material, child);
-                            }
+                    // Opsional: Tambahkan mesh kusen asli ke collidables jika ada dan Anda inginkan
+                    const actualDoorWayMesh = model.getObjectByName(doorInstanceConfig.doorWayMeshName);
+                    if (actualDoorWayMesh && actualDoorWayMesh.isMesh) {
+                        if (!currentModelCollidables.includes(actualDoorWayMesh)) { // Hindari duplikat jika sudah masuk
+                           // currentModelCollidables.push(actualDoorWayMesh);
+                           // console.log(`[ModelLoader] Kusen asli ${actualDoorWayMesh.name} ditambahkan ke collidables.`);
                         }
                     }
                 });
-                // BARIS DEBUG 3 (Bisa dikomentari/dihapus)
-                // console.log(`--- End of meshes for ${modelConfig.id} ---`);
-
-                scene.add(model);
-                loadedModels.set(modelConfig.id, { model: model, mixer: mixer, animations: animations });
-                resolve({ model, mixer, animations });
-            },
-            undefined, // xhr (progress)
-            (error) => {
-                console.error(`Error loading ${modelConfig.path}:`, error);
-                reject(error);
+            } else if (doorMainConfig) {
+                console.warn("[ModelLoader] Konfigurasi pintu dinamis ada, tapi 'doorInstances' kosong atau tidak ada di config.js.");
             }
+
+            // Traverse sisa model untuk collidables lain & setup umum
+            const processedCollidableUUIDs = new Set(currentModelCollidables.map(m => m.uuid));
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    if (!processedCollidableUUIDs.has(child.uuid)) { // Hanya proses jika belum ditangani (misal sebagai pintu/kusen)
+                        child.castShadow = true; child.receiveShadow = true;
+                        if (modelConfig.doubleSidedMeshNames && modelConfig.doubleSidedMeshNames.includes(child.name)) {
+                            if (Array.isArray(child.material)) child.material.forEach(mat => mat.side = THREE.DoubleSide);
+                            else if (child.material) child.material.side = THREE.DoubleSide;
+                        }
+                        currentModelCollidables.push(child);
+                        processedCollidableUUIDs.add(child.uuid);
+                    }
+                }
+            });
+
+            collidableMeshes.push(...currentModelCollidables);
+            scene.add(model); // Tambahkan model utama (yang mungkin berisi kusen-kusen asli)
+            loadedModels.set(modelConfig.id, { model, mixer, animations: gltf.animations, gltf });
+            console.log(`[ModelLoader] Model "${modelConfig.id}" dimuat. Total Collidables (termasuk pintu): ${currentModelCollidables.length}. Pintu dinamis dibuat: ${dynamicDoors.size}.`);
+            resolve({ model, mixer, animations: gltf.animations });
+        },
+        undefined, (error) => { console.error(`[ModelLoader] Error memuat GLB ${modelConfig.path}:`, error); reject(error); }
         );
+    });
+}
+
+// Fungsi createDynamicDoor sekarang menggunakan doorWayNameKey dan visualPosition dari fullDoorSetup
+function createDynamicDoor(doorWayNameKey, fullDoorSetup, scene, collidablesList) {
+    console.log(`[CreateDoor] Memulai untuk instance kunci: ${doorWayNameKey} menggunakan config visualPosition.`);
+    const doorGeometry = new THREE.BoxGeometry(fullDoorSetup.doorWidth, fullDoorSetup.doorHeight, fullDoorSetup.doorThickness);
+    if (!sharedDoorMaterial) {
+        console.error(`[CreateDoor - ${doorWayNameKey}] KRITIS: sharedDoorMaterial tidak ada! Fallback ke merah.`);
+        sharedDoorMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    }
+    const doorMesh = new THREE.Mesh(doorGeometry, sharedDoorMaterial);
+    doorMesh.name = `${doorWayNameKey}_GeneratedDoor`;
+    doorMesh.castShadow = true; doorMesh.receiveShadow = true;
+
+    const interactionTargetGeometry = new THREE.BoxGeometry(
+        fullDoorSetup.doorWidth + 0.25, fullDoorSetup.doorHeight + 0.25, Math.max(0.6, fullDoorSetup.doorThickness * 3)
+    );
+    const interactionTargetMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ee00, transparent: true, opacity: 0.0, depthWrite: false, visible: true // Opacity 0.3 untuk debug
+    });
+    const interactionTargetMesh = new THREE.Mesh(interactionTargetGeometry, interactionTargetMaterial);
+    interactionTargetMesh.name = `${doorWayNameKey}_InteractionTarget`;
+
+    // --- PENEMPATAN PINTU BERDASARKAN visualPosition DAN visualRotationY DARI CONFIG ---
+    if (fullDoorSetup.visualPosition && fullDoorSetup.visualPosition.length === 3) {
+        doorMesh.position.set(
+            fullDoorSetup.visualPosition[0],
+            fullDoorSetup.visualPosition[1],
+            fullDoorSetup.visualPosition[2]
+        );
+        console.log(`[CreateDoor - ${doorWayNameKey}] Pintu diposisikan ke visualPosition dari config:`, doorMesh.position.toArray().map(n=>n.toFixed(2)));
+    } else {
+        console.warn(`[CreateDoor - ${doorWayNameKey}] visualPosition tidak valid atau tidak ada di config. Pintu akan ditempatkan di (0,0,0).`);
+        doorMesh.position.set(0,0,0); // Fallback jika config salah
+    }
+
+    doorMesh.quaternion.identity(); // Mulai dengan tidak ada rotasi (menghadap -Z global jika tidak ada rotasi Y)
+    if (typeof fullDoorSetup.visualRotationY === 'number' && fullDoorSetup.visualRotationY !== 0) {
+        const yRotationRadians = THREE.MathUtils.degToRad(fullDoorSetup.visualRotationY);
+        // Cara yang lebih aman untuk set rotasi Y:
+        const eulerRotation = new THREE.Euler(0, yRotationRadians, 0, 'YXZ');
+        doorMesh.quaternion.setFromEuler(eulerRotation);
+        console.log(`[CreateDoor - ${doorWayNameKey}] Pintu dirotasi Y sebesar ${fullDoorSetup.visualRotationY} derajat.`);
+    }
+    // Opsional: Sedikit penyesuaian Z lokal setelah rotasi untuk menghindari Z-fighting
+    // doorMesh.translateZ(0.01); // Geser sedikit maju (Z positif LOKAL pintu)
+    // --- END PENEMPATAN PINTU ---
+
+    interactionTargetMesh.position.copy(doorMesh.position);
+    interactionTargetMesh.quaternion.copy(doorMesh.quaternion);
+
+    doorMesh.userData.isMovable = true;
+    doorMesh.userData.closedPosition = doorMesh.position.clone(); // Ini adalah posisi TERTUTUP yang sudah benar
+    const slideVector = new THREE.Vector3();
+    if (fullDoorSetup.slideAxis.toLowerCase() === 'x') slideVector.set(1, 0, 0);
+    else if (fullDoorSetup.slideAxis.toLowerCase() === 'y') slideVector.set(0, 1, 0);
+    else slideVector.set(0, 0, 1); // Default ke Z jika tidak spesifik
+    slideVector.multiplyScalar(fullDoorSetup.slideDirection);
+    // Vektor geser harus relatif terhadap orientasi pintu SAAT INI
+    slideVector.applyQuaternion(doorMesh.quaternion.clone());
+    const slideDistance = fullDoorSetup.doorWidth * fullDoorSetup.slideOffsetFactor;
+    doorMesh.userData.openPosition = doorMesh.userData.closedPosition.clone().addScaledVector(slideVector, slideDistance);
+    doorMesh.userData.isDoorOpen = false; doorMesh.userData.isDoorAnimating = false;
+    doorMesh.userData.animationDuration = fullDoorSetup.animationDuration;
+    doorMesh.userData.animationProgress = 0; doorMesh.userData.doorWayParentName = doorWayNameKey;
+
+    scene.add(doorMesh); collidablesList.push(doorMesh); // Pintu fisik adalah collidable
+    scene.add(interactionTargetMesh);
+    dynamicDoors.set(doorWayNameKey, { doorMesh, interactionTargetMesh });
+
+    console.groupCollapsed(`--- [Log Detail ConfigPos] Sistem Pintu Dinamis untuk: ${doorWayNameKey} ---`);
+    const doorWPos = new THREE.Vector3(); doorMesh.getWorldPosition(doorWPos);
+    const doorEuler = new THREE.Euler().setFromQuaternion(doorMesh.quaternion, 'YXZ');
+    const iTargetWPos = new THREE.Vector3(); interactionTargetMesh.getWorldPosition(iTargetWPos);
+    const camWPosLog = new THREE.Vector3(); camera.getWorldPosition(camWPosLog);
+    console.log(`Pintu Dibuat "${doorMesh.name}" Pos Dunia (dari config):`, doorWPos.toArray().map(n=>n.toFixed(2)).join(', '));
+    console.log(`Pintu Dibuat "${doorMesh.name}" Rotasi Dunia (dari config, Euler YXZ deg):`, doorEuler.toArray().slice(0,3).map(n => THREE.MathUtils.radToDeg(n).toFixed(1)).join(', '));
+    console.log(`Target Tertutup Pintu (Posisi Dunia):`, doorMesh.userData.closedPosition.toArray().map(n=>n.toFixed(2)).join(', '));
+    console.log(`Target Terbuka Pintu (Posisi Dunia):`, doorMesh.userData.openPosition.toArray().map(n=>n.toFixed(2)).join(', '));
+    console.log(`Target Interaksi "${interactionTargetMesh.name}" Pos Dunia:`, iTargetWPos.toArray().map(n=>n.toFixed(2)).join(', '));
+    console.log(`Kamera Pos Dunia (saat log):`, camWPosLog.toArray().map(n=>n.toFixed(2)).join(', '));
+    console.log(`Jarak Kamera ke Pintu (aktual):`, camWPosLog.distanceTo(doorWPos).toFixed(2));
+    console.log(`Jarak Kamera ke Target Interaksi (aktual):`, camWPosLog.distanceTo(iTargetWPos).toFixed(2));
+    console.groupEnd();
+}
+
+export function toggleMovableMeshState(doorWayNameKey, isDynamicDoor = false) {
+    // ... (Fungsi ini sama seperti versi terakhir dengan log-nya, menggunakan doorWayNameKey)
+    console.log(`[ToggleState] Dipanggil untuk: ${doorWayNameKey}, isDynamic: ${isDynamicDoor}`);
+    if (!isDynamicDoor) return null;
+    const doorSystem = dynamicDoors.get(doorWayNameKey);
+    if (!doorSystem || !doorSystem.doorMesh) { console.warn(`[ToggleState] Sistem pintu dinamis untuk kunci "${doorWayNameKey}" tidak ditemukan.`); return null; }
+    const meshToAnimate = doorSystem.doorMesh;
+    console.log(`[ToggleState] Mesh pintu yang akan dianimasikan: ${meshToAnimate.name}`);
+    if (!meshToAnimate.userData.isMovable) { console.warn(`[ToggleState] Pintu "${meshToAnimate.name}" tidak movable.`); return null; }
+    if (meshToAnimate.userData.isDoorAnimating) { console.log(`[ToggleState] Pintu "${meshToAnimate.name}" sudah beranimasi.`); return meshToAnimate.userData.isDoorOpen; }
+    meshToAnimate.userData.isDoorOpen = !meshToAnimate.userData.isDoorOpen;
+    meshToAnimate.userData.isDoorAnimating = true;
+    meshToAnimate.userData.animationProgress = 0;
+    console.log(`[ToggleState] Animasi pintu "${meshToAnimate.name}" dimulai. Target baru: ${meshToAnimate.userData.isDoorOpen ? 'TERBUKA' : 'TERTUTUP'}`);
+    return meshToAnimate.userData.isDoorOpen;
+}
+
+export function updateAnimatedMeshes(delta) {
+    // ... (Fungsi ini sama seperti versi terakhir)
+    dynamicDoors.forEach((doorSystem) => {
+        const doorMesh = doorSystem.doorMesh;
+        if (doorMesh.userData.isMovable && doorMesh.userData.isDoorAnimating) {
+            const animDuration = doorMesh.userData.animationDuration;
+            doorMesh.userData.animationProgress += delta / animDuration;
+            const startPos = doorMesh.userData.isDoorOpen ? doorMesh.userData.closedPosition : doorMesh.userData.openPosition;
+            const endPos = doorMesh.userData.isDoorOpen ? doorMesh.userData.openPosition : doorMesh.userData.closedPosition;
+            if (doorMesh.userData.animationProgress >= 1.0) {
+                doorMesh.userData.animationProgress = 1.0;
+                doorMesh.userData.isDoorAnimating = false;
+                doorMesh.position.copy(endPos);
+            } else {
+                doorMesh.position.lerpVectors(startPos, endPos, doorMesh.userData.animationProgress);
+            }
+        }
     });
 }

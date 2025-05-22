@@ -1,21 +1,23 @@
 // js/interactionHandler.js
 import * as THREE from 'three';
 import { interactableObjectsSetup, interactionSettings } from './interactionConfig.js';
-import { loadedModels } from './modelLoader.js';
+import { loadedModels, dynamicDoors, toggleMovableMeshState } from './modelLoader.js';
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2(0, 0);
 let hintElement;
 const objectStates = new Map();
 const neonLightInstances = new Map();
+let currentInteractableData = null;
 
-export function initInteractionHandler(mainControlsInstance) { // Terima mainControlsInstance
+export function initInteractionHandler(mainControlsInstance) {
     hintElement = document.getElementById(interactionSettings.hintElementId);
     if (!hintElement) {
-        console.error(`Hint element "${interactionSettings.hintElementId}" not found.`);
+        console.error(`[IntHandler] Elemen hint ID "${interactionSettings.hintElementId}" tidak ditemukan.`);
     }
     document.addEventListener('keydown', (event) => {
         if (event.code === 'KeyE' && mainControlsInstance && mainControlsInstance.isLocked) {
+            console.log("[IntHandler] Tombol 'E' ditekan saat terkunci.");
             performInteraction(mainControlsInstance.getObject());
         }
     });
@@ -25,147 +27,181 @@ export function registerNeonLight(modelId, meshName, lightInstance) {
     const lightKey = `${modelId}_${meshName}_light`;
     neonLightInstances.set(lightKey, lightInstance);
     objectStates.set(lightKey, lightInstance.visible);
-    // console.log(`Registered neon light: ${lightKey}`);
 }
 
-let currentInteractableData = null;
-
 export function updateInteractionHint(camera) {
-    // ... (fungsi updateInteractionHint tetap sama seperti versi terakhir Anda yang sudah benar)
     if (!hintElement || !camera) return;
     raycaster.setFromCamera(pointer, camera);
     raycaster.far = interactionSettings.raycastDistance;
+
     const allPotentialTargets = [];
+
     interactableObjectsSetup.forEach(config => {
         const modelData = loadedModels.get(config.targetModelId);
-        if (modelData && modelData.model) {
-            config.meshNames.forEach(name => {
-                const object = modelData.model.getObjectByName(name);
-                if (object) allPotentialTargets.push({ mesh: object, config: config, type: 'static' });
+        if (modelData?.model) {
+            config.meshNames.forEach(meshNameForRaycast => {
+                const object = modelData.model.getObjectByName(meshNameForRaycast);
+                if (object) {
+                    allPotentialTargets.push({ mesh: object, config: config, type: 'static_object' });
+                }
             });
         }
     });
-    neonLightInstances.forEach((light, lightKey) => {
-        const parts = lightKey.split('_');
-        if (parts.length < 3) return;
-        const modelId = parts[0];
-        const meshName = parts.slice(1, -1).join('_');
+
+    neonLightInstances.forEach((lightInstance, lightKey) => {
+        const [modelId, ...meshNameParts] = lightKey.split('_');
+        const actualMeshName = meshNameParts.slice(0, -1).join('_');
         const modelData = loadedModels.get(modelId);
-        if (modelData && modelData.model) {
-            const neonMesh = modelData.model.getObjectByName(meshName);
+        if (modelData?.model) {
+            const neonMesh = modelData.model.getObjectByName(actualMeshName);
             if (neonMesh) {
                 const isLightOn = objectStates.get(lightKey);
                 allPotentialTargets.push({
                     mesh: neonMesh,
-                    config: {
-                        id: lightKey, action: "toggle_neon_light",
-                        message: `Tekan E untuk ${isLightOn ? "matikan" : "nyalakan"} Lampu Neon`,
-                        lightKey: lightKey
-                    }, type: 'neon_light'
+                    config: { id: lightKey, action: "toggle_neon_light", message: `Tekan E untuk ${isLightOn ? "matikan" : "nyalakan"} Lampu Neon`, lightKey: lightKey },
+                    type: 'neon_light'
                 });
             }
         }
     });
-    const meshesToIntersect = allPotentialTargets.map(item => item.mesh);
+
+    let dynamicDoorTargetsInList = 0;
+    dynamicDoors.forEach((doorSystem, doorWayNameKey) => {
+        if (doorSystem.interactionTargetMesh) {
+            allPotentialTargets.push({
+                mesh: doorSystem.interactionTargetMesh,
+                config: { id: `dynamic_door_control_${doorWayNameKey}`, action: "toggle_dynamic_door", doorWayParentName: doorWayNameKey },
+                type: 'dynamic_door_interaction_volume'
+            });
+            dynamicDoorTargetsInList++;
+        } else {
+            console.warn(`[UpdateHint] Pintu dinamis untuk ${doorWayNameKey} tidak punya interactionTargetMesh yang valid.`);
+        }
+    });
+    if (dynamicDoors.size > 0 && dynamicDoorTargetsInList === 0) {
+        console.warn("[UpdateHint] Ada pintu dinamis terdaftar, tapi tidak ada satupun interactionTargetMesh yang valid untuk ditambahkan ke potentialTargets.");
+    } else if (dynamicDoors.size > 0) {
+        // console.log(`[UpdateHint] ${dynamicDoorTargetsInList} target pintu dinamis ditambahkan ke allPotentialTargets.`);
+    }
+
+
+    const meshesToIntersect = allPotentialTargets.map(item => item.mesh).filter(Boolean);
+    if (meshesToIntersect.length === 0 && allPotentialTargets.length > 0) {
+         console.warn("[UpdateHint] Ada potentialTargets, tapi setelah filter Boolean, meshesToIntersect kosong. Cek validitas item.mesh.");
+    }
+
+
     if (meshesToIntersect.length === 0) {
-        hintElement.style.display = 'none';
+        if (hintElement.style.display !== 'none') {
+            // console.log("[UpdateHint] Tidak ada target untuk di-raycast, menyembunyikan hint.");
+            hintElement.style.display = 'none';
+        }
         currentInteractableData = null;
         return;
     }
-    const intersects = raycaster.intersectObjects(meshesToIntersect, true);
+
+    const intersects = raycaster.intersectObjects(meshesToIntersect, false); // false karena target adalah mesh tunggal, bukan grup
+
     if (intersects.length > 0) {
-        const firstIntersectedMesh = intersects[0].object;
+        const firstIntersectedObject3D = intersects[0].object;
+        // console.log(`[UpdateHint] Raycast mengenai: ${firstIntersectedObject3D.name} (ID: ${firstIntersectedObject3D.id})`);
         let foundData = null;
+
         for (const target of allPotentialTargets) {
-            if (target.mesh === firstIntersectedMesh || target.mesh.getObjectById(firstIntersectedMesh.id)) {
+            if (target.mesh === firstIntersectedObject3D) { // Cukup cek kesamaan objek langsung
                 foundData = target;
+                // console.log(`[UpdateHint] Target yang cocok ditemukan: Type: ${foundData.type}, Config ID: ${foundData.config.id}`);
                 break;
             }
         }
+        
         if (foundData) {
             currentInteractableData = foundData;
-            if (foundData.type === 'neon_light') {
-                const isLightOn = objectStates.get(foundData.config.lightKey);
-                hintElement.textContent = `Tekan E untuk ${isLightOn ? "matikan" : "nyalakan"} Lampu Neon`;
-            } else {
-                hintElement.textContent = foundData.config.message;
+            let message = foundData.config.message;
+
+            if (foundData.type === 'dynamic_door_interaction_volume') {
+                const doorSystem = dynamicDoors.get(foundData.config.doorWayParentName);
+                if (doorSystem?.doorMesh?.userData.isMovable) {
+                    const doorUserData = doorSystem.doorMesh.userData;
+                    message = `Tekan E untuk ${doorUserData.isDoorOpen ? "tutup" : "buka"} Pintu`;
+                    if (doorUserData.isDoorAnimating) message += " (Bergerak...)";
+                    // console.log(`[UpdateHint] Pesan hint pintu: "${message}" (Open: ${doorUserData.isDoorOpen}, Anim: ${doorUserData.isDoorAnimating})`);
+                } else {
+                    message = "Pintu (Error Konfig)";
+                    console.warn(`[UpdateHint] Error mendapatkan data pintu untuk hint. doorSystem:`, doorSystem, `doorWayParentName:`, foundData.config.doorWayParentName);
+                }
             }
+            hintElement.textContent = message;
             hintElement.style.display = 'block';
+            // console.log(`[UpdateHint] Menampilkan hint: "${message}"`);
         } else {
+            // Raycast kena sesuatu, tapi tidak ada di daftar target kita (seharusnya tidak terjadi jika meshesToIntersect benar)
+            if (currentInteractableData || hintElement.style.display !== 'none') {
+                // console.log(`[UpdateHint] Raycast mengenai ${firstIntersectedObject3D.name}, tapi tidak cocok dengan target. Menyembunyikan hint.`);
+                hintElement.style.display = 'none';
+                currentInteractableData = null;
+            }
+        }
+    } else { // Tidak ada intersect
+        if (currentInteractableData || hintElement.style.display !== 'none') {
+            // console.log("[UpdateHint] Tidak ada intersect, menyembunyikan hint.");
             hintElement.style.display = 'none';
             currentInteractableData = null;
         }
-    } else {
-        hintElement.style.display = 'none';
-        currentInteractableData = null;
     }
 }
 
 function performInteraction(camera) {
-    if (!currentInteractableData) return;
-
-    const { config } = currentInteractableData; // 'mesh' tidak selalu dibutuhkan di sini
-    console.log("Interacting with:", config.id || (config.meshNames ? config.meshNames.join(", ") : "N/A"), "Action:", config.action);
-
+    if (!currentInteractableData) {
+        console.log("[PerformInteraction] Tidak ada currentInteractableData, aksi dibatalkan.");
+        return;
+    }
+    const { config } = currentInteractableData;
+    console.log(`[PerformInteraction] Melakukan aksi: ${config.action} untuk ID: ${config.id}`);
 
     switch (config.action) {
         case "toggle_visibility":
-            // ... (logika toggle_visibility tetap sama) ...
             const modelDataVis = loadedModels.get(config.targetModelId);
-            if (modelDataVis && modelDataVis.model && config.affectedMeshNames) {
+            if (modelDataVis?.model && config.affectedMeshNames) {
                 config.affectedMeshNames.forEach(objName => {
                     const targetObject = modelDataVis.model.getObjectByName(objName);
                     if (targetObject) {
                         targetObject.visible = !targetObject.visible;
-                        objectStates.set(config.id + "_" + objName, targetObject.visible);
-                        console.log(`${objName} visibility: ${targetObject.visible}`);
+                        console.log(`[PerformInteraction] Visibilitas "${objName}" diubah menjadi ${targetObject.visible}`);
                     }
                 });
             }
             break;
-
         case "toggle_neon_light":
             const lightKey = config.lightKey;
             const lightInstance = neonLightInstances.get(lightKey);
-            let currentLightState = objectStates.get(lightKey);
-
             if (lightInstance) {
-                lightInstance.visible = !currentLightState;
-                objectStates.set(lightKey, lightInstance.visible);
-                console.log(`Neon light ${lightKey} turned ${lightInstance.visible ? "ON" : "OFF"}`);
-
-                const parts = lightKey.split('_');
-                const modelId = parts[0];
-                const meshName = parts.slice(1, -1).join('_'); // Rekonstruksi nama mesh
-                const modelDataLight = loadedModels.get(modelId);
-
-                if (modelDataLight && modelDataLight.model) {
-                    const neonMesh = modelDataLight.model.getObjectByName(meshName);
-                    if (neonMesh && neonMesh.material) { // Pastikan material ada
-                        const newEmissiveIntensity = lightInstance.visible ? 2.0 : 0.0; // Nilai emissive saat ON, dan 0 saat OFF
-
-                        const setEmissiveIntensityOnMaterial = (material) => {
-                            // KARENA KITA SUDAH KLONING MATERIAL DI createNeonLightsFromModel,
-                            // KITA BISA LANGSUNG MODIFIKASI DI SINI.
-                            if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-                                material.emissiveIntensity = newEmissiveIntensity;
-                            }
-                            // Untuk MeshBasicMaterial, emissiveIntensity tidak ada.
-                            // Jika ingin efek mati/nyala, Anda mungkin perlu mengubah warna atau visibilitas mesh itu sendiri.
-                            // Namun, karena di createNeonLightsFromModel kita sudah set warnanya saat ON,
-                            // mematikan PointLight dan emissiveIntensity sudah cukup.
-                            material.needsUpdate = true;
-                        };
-
-                        if (Array.isArray(neonMesh.material)) {
-                            neonMesh.material.forEach(setEmissiveIntensityOnMaterial);
-                        } else {
-                            setEmissiveIntensityOnMaterial(neonMesh.material);
-                        }
-                    }
+                const newState = !lightInstance.visible;
+                lightInstance.visible = newState;
+                objectStates.set(lightKey, newState);
+                console.log(`[PerformInteraction] Lampu neon "${lightKey}" diubah menjadi ${newState ? "NYALA" : "MATI"}`);
+                const [modelId, ...meshNameParts] = lightKey.split('_');
+                const actualMeshName = meshNameParts.slice(0, -1).join('_');
+                const modelDataNeon = loadedModels.get(modelId);
+                const neonMesh = modelDataNeon?.model.getObjectByName(actualMeshName);
+                if (neonMesh?.material) {
+                    const newEmissiveIntensity = newState ? 2.0 : 0.0;
+                    const setEmissive = (material) => {
+                        if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) material.emissiveIntensity = newEmissiveIntensity;
+                        material.needsUpdate = true;
+                    };
+                    if (Array.isArray(neonMesh.material)) neonMesh.material.forEach(setEmissive);
+                    else setEmissive(neonMesh.material);
                 }
             }
             break;
+        case "toggle_dynamic_door":
+            const doorWayNameKey = config.doorWayParentName;
+            console.log(`[PerformInteraction] Aksi toggle_dynamic_door untuk kusen kunci: ${doorWayNameKey}`);
+            toggleMovableMeshState(doorWayNameKey, true);
+            break;
+        default:
+            console.warn(`[PerformInteraction] Aksi tidak dikenal: ${config.action}`);
     }
     if (camera) {
         updateInteractionHint(camera);
