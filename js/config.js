@@ -29,7 +29,7 @@ export const modelsToLoad = [
                 },
                 {
                     doorWayMeshName: "DoorWay2_Objet2_0",
-                    visualPosition: [-6.5, 1.575, -1.0], // PERKIRAAN ANDA untuk kusen kedua
+                    visualPosition: [-6.62, 1.575, -1.0], // PERKIRAAN ANDA untuk kusen kedua
                     visualRotationY: 90                  // Contoh: Pintu ini perlu diputar 90 derajat di Y
                 },
                 {
