@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proyek Grafika Komputer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- BARU: Loading Screen -->
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <p id="loading-text">MEMUAT...</p> 
+    </div>
+
+    <div id="blocker">
+        <div id="instructions"> 
+            <!-- play-button-text akan diisi oleh JS saat loading selesai atau untuk instruksi -->
+            <span id="play-button-text" class="play-button-style"></span> 
+            <br /><br />
+            Gerak: W, A, S, D<br/>
+            Lihat: Mouse<br/>
+            Lari: Shift<br/>
+            Interaksi Umum: E<br/>
+            Interaksi Spesifik: F (jika ada)<br/>
+            Toggle FPS: P<br/>
+            Toggle Ghost Mode (Noclip): G<br/>
+            Batalkan Misi Darurat: L (jika aktif)
+        </div>
+        <div id="ghost-mode-pause-instructions" style="display:none;">
+            <span id="resume-ghost-button-text" class="play-button-style">Klik untuk Lanjut</span>
+            <br /><br />
+            --- GHOST MODE AKTIF (PAUSE) ---<br/>
+            Gerak Horizontal: W, A, S, D<br/>
+            Lari: Shift<br/>
+            Naik: Spasi<br/>
+            Turun: Ctrl<br/>
+            Toggle Ghost Mode: G
+        </div>
+    </div>
+
+    <div id="ghost-mode-hud" style="display:none;">
+        <strong>Ghost Mode Aktif</strong><br/>
+        Gerak: W,A,S,D + Shift<br/>
+        Naik: Spasi<br/>
+        Turun: Ctrl<br/>
+        Toggle: G
+    </div>
+
+    <div id="emergency-mode-hud" style="display:none;">
+        <strong>MODE DARURAT AKTIF</strong><br/>
+        Tekan L untuk Batalkan
+    </div>
+
+    <div id="webgl-container"></div>
+    <div id="interaction-hint"></div>
+    <div id="fps-counter">FPS: 0</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -20,6 +20,6 @@ Tujuan utamanya adalah membuat sistem yang mudah dikembangkan dan dimodifikasi, 
 **Keluaran (output) harus:**
 - Bersih, mudah dibaca
 - Modular dan bisa dimodifikasi dengan cepat
-- js yang di tambah/di revisi tulis ulang full jangan hanya sepotong sepotong
+- js yang di tambah/di revisi tulis ulang full jangan hanya sepotong sepotong (jangan tulis ... sama seperti sebelumnya, kasih saya kodingan full nya jangan hanya sebagian)
 - Siap di-deploy ke web (dengan loading async)
 - Memungkinkan developer untuk menambahkan lebih banyak objek hanya dengan mengubah `config.js`

@@ -1,0 +1,219 @@
+body {
+    margin: 0;
+    overflow: hidden; /* Mencegah scrollbar */
+    font-family: Arial, sans-serif;
+    background-color: #000; /* Latar belakang default jika webgl-container belum termuat */
+}
+
+#webgl-container {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+#blocker {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.75); 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    z-index: 200; 
+}
+
+#instructions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 30px 40px; 
+    background-color: rgba(25, 28, 38, 0.92); 
+    border-radius: 12px; 
+    box-shadow: 0 5px 25px rgba(0,0,0,0.6); 
+    color: #E0E0E0; 
+    font-size: 16px; 
+    max-width: 500px; 
+    border: 1px solid rgba(100, 255, 218, 0.2); 
+}
+
+#main-instructions, 
+#ghost-mode-pause-instructions {
+    line-height: 1.7; 
+    color: #C5C8D3; 
+}
+
+#main-instructions br,
+#ghost-mode-pause-instructions br {
+    margin-bottom: 5px; 
+}
+
+#ghost-mode-pause-instructions strong,
+#ghost-mode-pause-instructions .instruction-title {
+    color: #64FFDA; 
+    font-weight: bold;
+    font-size: 18px;
+    display: block;
+    margin-bottom: 15px; 
+}
+
+.play-button-style { 
+    font-size: 32px; 
+    font-weight: bold;
+    color: #64FFDA; 
+    padding: 12px 25px;
+    border: 2px solid #64FFDA;
+    border-radius: 8px;
+    background-color: rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: background-color 0.2s ease-out, color 0.2s ease-out, transform 0.1s ease-out;
+    display: inline-block; 
+    margin-bottom: 25px; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+}
+
+.play-button-style:hover {
+    background-color: #64FFDA;
+    color: #191C26; 
+    transform: scale(1.03); 
+    box-shadow: 0 0 15px rgba(100, 255, 218, 0.5); 
+}
+
+#interaction-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 15px;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    border-radius: 5px;
+    font-size: 14px;
+    display: none;
+    z-index: 100;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#fps-counter {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 6px 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #E0E0E0;
+    font-size: 14px;
+    z-index: 100;
+    display: none;
+    border-radius: 3px;
+}
+
+#ghost-mode-hud {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 10px 15px;
+    background-color: rgba(30, 30, 40, 0.85);
+    color: #D5D8DE;
+    border: 1px solid rgba(100, 255, 218, 0.4);
+    border-radius: 5px;
+    font-size: 13px;
+    line-height: 1.6;
+    z-index: 101;
+    display: none;
+    text-align: left;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+}
+
+#ghost-mode-hud strong {
+    color: #64FFDA;
+    font-size: 14px; 
+    display: block;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(100, 255, 218, 0.2); 
+    padding-bottom: 4px;
+}
+
+/* BARU: Styling untuk HUD Mode Darurat */
+#emergency-mode-hud {
+    position: absolute;
+    top: 50px; /* Di bawah FPS counter jika FPS aktif, atau sesuaikan */
+    left: 10px; /* Atau kanan, atau tengah atas */
+    padding: 10px 15px;
+    background-color: rgba(150, 0, 0, 0.85); /* Latar merah gelap */
+    color: #FFAAAA; /* Teks merah muda */
+    border: 1px solid rgba(255, 50, 50, 0.7);
+    border-radius: 5px;
+    font-size: 13px;
+    line-height: 1.6;
+    z-index: 102; /* Di atas HUD lain jika perlu */
+    display: none;
+    text-align: left;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+}
+
+#emergency-mode-hud strong {
+    color: #FFDDDD; /* Teks judul lebih terang */
+    font-size: 14px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 100, 100, 0.3);
+    padding-bottom: 4px;
+    text-transform: uppercase;
+}
+
+
+#error-display-message {
+    margin-top: 20px; 
+    padding: 15px;
+    background-color: rgba(80, 20, 20, 0.8); 
+    border: 1px solid rgba(255, 80, 80, 0.7);
+    border-radius: 5px;
+    color: white;
+}
+
+#error-display-message span:first-child {
+    font-weight: bold;
+    font-size: 20px;
+}
+
+
+/* loading screen */
+#loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #101218;
+    display: flex; 
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 300; 
+    color: #E0E0E0;
+    font-family: Arial, sans-serif;
+}
+
+.spinner {
+    border: 8px solid #444;
+    border-top: 8px solid #64FFDA;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+#loading-text { /* Pastikan elemen ini ada di HTML dalam #loading-screen */
+    font-size: 18px;
+    letter-spacing: 1px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

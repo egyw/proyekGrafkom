@@ -10,8 +10,8 @@ import {
     registerNeonLight, 
     handleInteractionKeyPress,
     getNeonLightSystems,
-    resetAllToNormalState
-    // HAPUS impor fungsi prewarm: prewarmTVMaterials, prewarmNeonLightSystems
+    resetAllToNormalState,
+    updateAutoRotateOnLookObjects // BARU: Impor fungsi update rotasi
 } from './interactionHandler.js';
 import { interactionSettings, emergencySettings } from './interactionConfig.js';
 
@@ -33,20 +33,18 @@ let ghostModeHudElement;
 let emergencyModeHudElement;
 let emergencyHudTimeoutId = null;
 
-// Untuk loading screen
-let loadingScreenElement; // Elemen div loading screen
-let loadingTextElement; // Elemen untuk teks di loading screen (misalnya #play-button-text)
-let instructionsContainer; // Kontainer untuk instruksi utama
+let loadingScreenElement; 
+let loadingTextElement; 
+let instructionsContainer; 
 
 async function init() {
-    // Setup Loading Screen
-    loadingScreenElement = document.getElementById('loading-screen'); // Ambil dari HTML
-    loadingTextElement = document.getElementById('loading-text'); // Ambil elemen teks loading
+    loadingScreenElement = document.getElementById('loading-screen'); 
+    loadingTextElement = document.getElementById('loading-text'); 
     instructionsContainer = document.getElementById('instructions');
 
     if (loadingScreenElement) loadingScreenElement.style.display = 'flex';
     if (loadingTextElement) loadingTextElement.textContent = "MEMUAT ASET...";
-    if (instructionsContainer) instructionsContainer.style.display = 'none'; // Sembunyikan instruksi awal
+    if (instructionsContainer) instructionsContainer.style.display = 'none'; 
 
     initScene(); 
 
@@ -58,10 +56,7 @@ async function init() {
         if (instructionsContainer) instructionsContainer.style.display = 'flex';
         return;
     }
-    // Jangan tambahkan playerControlsInstance.getObject() ke scene dulu
-
-    await initInteractionHandler(); 
-
+    
     clock = new THREE.Clock();
     fpsCounterElement = document.getElementById('fps-counter');
     if (fpsCounterElement) fpsCounterElement.style.display = showFPS ? 'block' : 'none';
@@ -76,10 +71,13 @@ async function init() {
     try {
         console.log("Memulai pemuatan model...");
         const loadPromises = modelsToLoad.map(modelConfig => loadGLBModel(modelConfig, scene));
-        const loadedResults = await Promise.all(loadPromises); // Tunggu semua model selesai
+        const loadedResults = await Promise.all(loadPromises); 
         console.log("Semua model berhasil dimuat.");
 
-        // Proses model SETELAH semua dimuat
+        // initInteractionHandler dipanggil SETELAH semua model dimuat
+        // agar referensi mesh untuk 'rotate_on_look' bisa ditemukan
+        await initInteractionHandler(); 
+
         loadedResults.forEach(result => {
             if (!result || !result.model) return;
             const modelConfig = modelsToLoad.find(cfg => cfg.id === result.model.name);
@@ -104,18 +102,10 @@ async function init() {
             }
         });
 
-        // Tambahkan objek kamera kontrol ke scene SETELAH semua model dimuat & diproses
         scene.add(playerControlsInstance.getObject());
 
-        // HAPUS bagian prewarmAllMaterials()
-        // console.log("Memulai pemanasan material/shader...");
-        // await prewarmAllMaterials(); 
-        // console.log("Pemanasan material/shader selesai.");
-
-        // Sembunyikan loading screen dan tampilkan instruksi untuk bermain
         if (loadingScreenElement) loadingScreenElement.style.display = 'none';
         if (instructionsContainer) instructionsContainer.style.display = 'flex';
-        // Jika Anda menggunakan #play-button-text di dalam #instructions untuk "Klik untuk Bermain"
         const playButtonText = document.getElementById('play-button-text');
         if (playButtonText) playButtonText.textContent = "Klik untuk Bermain";
 
@@ -131,10 +121,7 @@ async function init() {
     }
 }
 
-// HAPUS fungsi prewarmAllMaterials()
-
 function onDocumentKeyDown(event) {
-    // ... (SAMA seperti sebelumnya)
     if (!playerControlsInstance) return;
     if (event.code === 'KeyP') toggleFPSCounter();
     if (playerControlsInstance.isLocked) {
@@ -146,13 +133,11 @@ function onDocumentKeyDown(event) {
 }
 
 function onDocumentKeyUp(event) {
-    // ... (SAMA seperti sebelumnya)
     if (!playerControlsInstance || !playerControlsInstance.isLocked) return;
     handleKeyUp(event);
 }
 
 export function setEmergencyModeActive(isActive) {
-    // ... (SAMA seperti sebelumnya)
     if (isEmergencyModeActive === isActive) return;
     isEmergencyModeActive = isActive;
     console.log(`[Main] Mode Darurat ${isActive ? 'DIAKTIFKAN' : 'DINONAKTIFKAN'}`);
@@ -176,11 +161,8 @@ export function setEmergencyModeActive(isActive) {
 }
 
 function updateInstructionsVisibility() {
-    // ... (SAMA seperti sebelumnya, dengan penyesuaian untuk loading screen)
     const blockerIsVisible = document.getElementById('blocker').style.display !== 'none';
-    // const instructionsContainer sudah didefinisikan global
     if (mainInstructionsElement && ghostModePauseInstructionsElement && instructionsContainer) {
-        // Hanya tampilkan instructions jika loading screen TIDAK aktif DAN blocker aktif
         if (blockerIsVisible && (!loadingScreenElement || loadingScreenElement.style.display === 'none')) {
             instructionsContainer.style.display = 'flex';
             if (isGhostModeActive) {
@@ -191,18 +173,14 @@ function updateInstructionsVisibility() {
                 ghostModePauseInstructionsElement.style.display = 'none';
             }
         } else if (!blockerIsVisible) {
-            // Game berjalan, PointerLockControls akan menangani #instructions
-            // Ini juga berarti loading screen sudah tidak aktif
+            // Game berjalan
         } else {
-            // Blocker aktif DAN loading screen aktif (atau salah satu tidak terdefinisi)
-            // => sembunyikan #instructions
              if (instructionsContainer) instructionsContainer.style.display = 'none';
         }
     }
 }
 
 function updateHUDVisibility() {
-    // ... (SAMA seperti sebelumnya)
     const isLocked = playerControlsInstance && playerControlsInstance.isLocked;
     if (ghostModeHudElement) ghostModeHudElement.style.display = (isGhostModeActive && isLocked) ? 'block' : 'none';
     if (emergencyModeHudElement && emergencyModeHudElement.style.display === 'block') {
@@ -211,26 +189,22 @@ function updateHUDVisibility() {
 }
 
 function updateUIVisibility() {
-    // ... (SAMA seperti sebelumnya)
     updateInstructionsVisibility();
     updateHUDVisibility();
 }
 
 function toggleFPSCounter() {
-    // ... (SAMA seperti sebelumnya)
     showFPS = !showFPS;
     if (fpsCounterElement) fpsCounterElement.style.display = showFPS ? 'block' : 'none';
 }
 
 function toggleGhostMode() {
-    // ... (SAMA seperti sebelumnya)
     isGhostModeActive = !isGhostModeActive;
     setNoclipState(isGhostModeActive, camera);
     updateUIVisibility();
 }
 
 function createNeonLightsFromModel(modelId, modelInstance) {
-    // ... (SAMA seperti kode yang Anda berikan di permintaan terakhir, sebelum revert)
     const uniqueNeonObjectNames = [];
     uniqueNeonObjectNames.push("Neon_Objet_0");
     for (let i = 1; i <= 14; i++) {
@@ -255,7 +229,7 @@ function createNeonLightsFromModel(modelId, modelInstance) {
             const pointLight = new THREE.PointLight(initialColor.getHex(), initialIntensity, 12.0, 2.0 );
             pointLight.position.copy(worldPosition);
             scene.add(pointLight);
-            registerNeonLight(modelId, meshName, pointLight, neonMesh); // Pastikan registerNeonLight dipanggil dengan benar
+            registerNeonLight(modelId, meshName, pointLight, neonMesh); 
             const setupEmissiveMaterial = (originalMaterial) => {
                 const clonedMaterial = originalMaterial.isCloned ? originalMaterial : originalMaterial.clone();
                 if (clonedMaterial.isMeshStandardMaterial || clonedMaterial.isMeshPhysicalMaterial) {
@@ -274,7 +248,6 @@ function createNeonLightsFromModel(modelId, modelInstance) {
 }
 
 function updateEmergencyLightsVisuals() {
-    // ... (SAMA seperti kode yang Anda berikan di permintaan terakhir, sebelum revert)
     if (!isEmergencyModeActive) return;
     const currentTime = clock.elapsedTime * 1000;
     if (currentTime - lastEmergencyBlinkTime > emergencySettings.blinkInterval) {
@@ -297,27 +270,38 @@ function updateEmergencyLightsVisuals() {
     }
 }
 
-const MAX_DELTA_TIME = 1 / 30;
+const MAX_DELTA_TIME = 1 / 30; // Batas atas untuk delta time
 
 function animate() {
-    // ... (SAMA seperti sebelumnya)
     requestAnimationFrame(animate);
     const rawDelta = clock.getDelta();
     const delta = Math.min(rawDelta, MAX_DELTA_TIME);
+
     updatePlayerMovement(delta);
-    updateAnimatedMeshes(delta);
+    updateAnimatedMeshes(delta); // Untuk pintu, dll.
+
     if (playerControlsInstance && playerControlsInstance.isLocked) {
         updateInteractionHint(playerControlsInstance.getObject(), isEmergencyModeActive);
+        updateAutoRotateOnLookObjects(delta); // BARU: Update rotasi objek yang dilihat
     } else {
         const hintElem = document.getElementById(interactionSettings.hintElementId);
         if (hintElem) hintElem.style.display = 'none';
+        // Saat tidak terkunci, pastikan objek 'rotate_on_look' tidak dianggap 'isLookedAt'
+        // dan kembali ke posisi awal. `updateAutoRotateOnLookObjects` sudah menangani ini
+        // jika `isLookedAt` di-set false oleh `updateInteractionHint`
+        updateAutoRotateOnLookObjects(delta); // Tetap update agar kembali ke posisi awal
     }
+
     updateUIVisibility(); 
+    
     for (const loadedData of loadedModels.values()) {
         if (loadedData.mixer) loadedData.mixer.update(delta);
     }
+
     if (isEmergencyModeActive) updateEmergencyLightsVisuals();
+
     renderer.render(scene, camera);
+
     if (showFPS && fpsCounterElement) {
         frameCount++;
         const currentTime = performance.now();
@@ -330,12 +314,11 @@ function animate() {
 }
 
 function displayErrorToUser(message) {
-    // ... (SAMA seperti sebelumnya)
     const blocker = document.getElementById('blocker');
-    // const instructionsContainer sudah didefinisikan global
     const mainInstructions = document.getElementById('main-instructions');
     const ghostModePauseInstructions = document.getElementById('ghost-mode-pause-instructions');
-    if (blocker && instructionsContainer) {
+    
+    if (blocker && instructionsContainer) { // instructionsContainer sudah global
         blocker.style.display = 'flex'; 
         instructionsContainer.style.display = 'flex'; 
         if(mainInstructions) mainInstructions.style.display = 'none';

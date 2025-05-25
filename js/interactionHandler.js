@@ -2,14 +2,14 @@
 import * as THREE from 'three';
 import { interactableObjectsSetup, interactionSettings, emergencySettings } from './interactionConfig.js';
 import { loadedModels, dynamicDoors, toggleMovableMeshState } from './modelLoader.js';
-import { setEmergencyModeActive } from './main.js'; // Impor fungsi dari main.js
+import { setEmergencyModeActive } from './main.js'; 
 
 const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2(0, 0); // Tengah layar
+const pointer = new THREE.Vector2(0, 0); 
 let hintElement;
-const objectStates = new Map(); // Menyimpan state umum objek (on/off, open/closed, mission_active)
-const neonLightSystems = new Map(); // Key: lightKey, Value: { light, mesh, originalLight*, originalMesh*, isEmergencyAffected }
-let currentInteractableData = null;
+const objectStates = new Map(); 
+const neonLightSystems = new Map(); 
+let currentInteractableData = null; 
 const objectSpecificMaterials = new Map();
 
 const textureLoader = new THREE.TextureLoader();
@@ -37,7 +37,7 @@ async function loadBlackTexture() {
 
 function getOrCloneMaterialForObject(mesh, configId) {
     if (!mesh.material) return null;
-    const materialKey = `${configId}_${mesh.uuid}`; // Kunci unik per mesh per config
+    const materialKey = `${configId}_${mesh.uuid}`; 
     if (objectSpecificMaterials.has(materialKey)) {
         return objectSpecificMaterials.get(materialKey);
     }
@@ -75,14 +75,58 @@ export async function initInteractionHandler() {
     }
     await loadBlackTexture();
     interactableObjectsSetup.forEach(config => {
-        if (config.initialState !== undefined && config.id) {
-            const initialStateIsOn = config.initialState === "on";
-            objectStates.set(config.id, initialStateIsOn); 
-            if (config.action === "toggle_tv_screen") {
+        if (config.id) {
+            if (config.initialState !== undefined) {
+                objectStates.set(config.id, config.initialState === "on");
+            }
+            if (config.action === "start_emergency_mission") {
+                objectStates.set(config.id + "_active", false);
+            }
+            if (config.action === "rotate_on_look") {
                 const modelData = loadedModels.get(config.targetModelId);
-                if (modelData?.model && config.meshNames.length > 0) {
+                let targetMesh = null;
+                if (modelData?.model && config.meshNames?.length > 0) {
+                    targetMesh = modelData.model.getObjectByName(config.meshNames[0]);
+                }
+                if (targetMesh) {
+                    const initialQuaternion = targetMesh.quaternion.clone();
+                    
+                    // Tentukan sumbu rotasi (LOKAL terhadap objek)
+                    const rotationAxisLocal = new THREE.Vector3();
+                    if (config.rotationAxis === 'x') rotationAxisLocal.set(1, 0, 0);
+                    else if (config.rotationAxis === 'y') rotationAxisLocal.set(0, 1, 0);
+                    else if (config.rotationAxis === 'z') rotationAxisLocal.set(0, 0, 1);
+                    else rotationAxisLocal.set(0, 1, 0); // Default Y
+
+                    const angleRad = THREE.MathUtils.degToRad(config.maxRotationAngle);
+                    const direction = config.rotationDirection !== undefined ? config.rotationDirection : 1;
+                    
+                    // Buat quaternion yang merepresentasikan rotasi tambahan
+                    const deltaRotationQuaternion = new THREE.Quaternion();
+                    deltaRotationQuaternion.setFromAxisAngle(rotationAxisLocal, angleRad * direction);
+                    
+                    // Gabungkan rotasi awal dengan rotasi tambahan untuk mendapatkan targetQuaternion
+                    // Target = Initial * Delta (urutan penting untuk rotasi lokal)
+                    const targetQuaternion = new THREE.Quaternion().multiplyQuaternions(initialQuaternion, deltaRotationQuaternion);
+
+                    objectStates.set(config.id, {
+                        isLookedAt: false,
+                        initialQuaternion: initialQuaternion,
+                        targetQuaternion: targetQuaternion, // Simpan target rotasi
+                        mesh: targetMesh,
+                        config: config // Simpan referensi ke config untuk akses speedFactor, dll.
+                    });
+                    // console.log(`[IntHandler] Initialized rotate_on_look: ${config.id}. InitialQ:`, initialQuaternion.toArray().map(n=>n.toFixed(2)), "TargetQ:", targetQuaternion.toArray().map(n=>n.toFixed(2)));
+                } else {
+                    console.warn(`[IntHandler] Mesh for rotate_on_look config ID "${config.id}" (name: ${config.meshNames?.[0]}) not found.`);
+                }
+            }
+            if (config.action === "toggle_tv_screen" && config.initialState !== undefined) {
+                 const initialStateIsOn = config.initialState === "on";
+                const modelDataTV = loadedModels.get(config.targetModelId);
+                if (modelDataTV?.model && config.meshNames.length > 0) {
                     const screenMeshName = config.meshNames[0];
-                    const screenMesh = modelData.model.getObjectByName(screenMeshName);
+                    const screenMesh = modelDataTV.model.getObjectByName(screenMeshName);
                     if (screenMesh) {
                         const materialToModify = getOrCloneMaterialForObject(screenMesh, config.id);
                         if (materialToModify) {
@@ -93,14 +137,10 @@ export async function initInteractionHandler() {
                 }
             }
         }
-        if (config.action === "start_emergency_mission") {
-            objectStates.set(config.id + "_active", false); 
-        }
     });
 }
 
 function applyTVMaterialProperties(materialOrArray, targetMaterialConfig, isTurningOn, objectFullConfig) {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
     const applyToSingleMaterial = (material) => {
         if (!material.userData) material.userData = {};
         if (!isTurningOn) {
@@ -129,7 +169,6 @@ function applyTVMaterialProperties(materialOrArray, targetMaterialConfig, isTurn
 }
 
 export function registerNeonLight(modelId, meshName, lightInstance, neonMeshInstance) {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
     const lightKey = `${modelId}_${meshName}_neonSystem`;
     let originalMeshEmissiveHex = 0xffffff;
     let originalMeshEmissiveIntensity = 1.0;
@@ -154,41 +193,46 @@ export function registerNeonLight(modelId, meshName, lightInstance, neonMeshInst
 }
 
 export function getNeonLightSystems() {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
     return neonLightSystems;
 }
 
 export function updateInteractionHint(camera, isEmergencyModeActiveGlobal) {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
-    if (!hintElement || !camera) return;
+    if (!camera) return;
     raycaster.setFromCamera(pointer, camera);
     raycaster.far = interactionSettings.raycastDistance;
+
     const allPotentialTargets = [];
     interactableObjectsSetup.forEach(config => {
         const modelData = loadedModels.get(config.targetModelId);
         if (modelData?.model) {
             config.meshNames.forEach(meshNameForRaycast => {
                 const object = modelData.model.getObjectByName(meshNameForRaycast);
-                if (object) allPotentialTargets.push({ mesh: object, config: config, type: config.action });
+                if (object) {
+                    allPotentialTargets.push({ mesh: object, config: config, type: config.action });
+                }
             });
         }
     });
-    neonLightSystems.forEach((system, lightKey) => {
-        if (!isEmergencyModeActiveGlobal && system.mesh) {
-            const isLightOn = objectStates.get(lightKey);
-            allPotentialTargets.push({
-                mesh: system.mesh,
-                config: { 
-                    id: lightKey, 
-                    action: "toggle_neon_light", 
-                    message: `Tekan E untuk ${isLightOn ? "matikan" : "nyalakan"} Lampu Neon`,
-                    triggerKey: "KeyE",
-                    lightKey: lightKey
-                },
-                type: 'neon_light'
-            });
-        }
-    });
+
+    if (!isEmergencyModeActiveGlobal) {
+        neonLightSystems.forEach((system, lightKey) => {
+            if (system.mesh) {
+                const isLightOn = objectStates.get(lightKey);
+                allPotentialTargets.push({
+                    mesh: system.mesh,
+                    config: { 
+                        id: lightKey, 
+                        action: "toggle_neon_light", 
+                        message: `Tekan E untuk ${isLightOn ? "matikan" : "nyalakan"} Lampu Neon`,
+                        triggerKey: "KeyE",
+                        lightKey: lightKey
+                    },
+                    type: 'neon_light'
+                });
+            }
+        });
+    }
+
     dynamicDoors.forEach((doorSystem, doorWayNameKey) => {
         if (doorSystem.interactionTargetMesh) {
             allPotentialTargets.push({
@@ -203,82 +247,103 @@ export function updateInteractionHint(camera, isEmergencyModeActiveGlobal) {
             });
         }
     });
+
     const meshesToIntersect = allPotentialTargets.map(item => item.mesh).filter(Boolean);
-    if (meshesToIntersect.length === 0) {
-        if (hintElement.style.display !== 'none') hintElement.style.display = 'none';
-        currentInteractableData = null;
-        return;
-    }
-    const intersects = raycaster.intersectObjects(meshesToIntersect, true);
-    if (intersects.length > 0) {
-        const firstIntersectedObject3D = intersects[0].object;
-        let foundData = null;
-        for (const target of allPotentialTargets) {
-            let isMatch = false;
-            if (target.mesh === firstIntersectedObject3D) isMatch = true;
-            else if (target.mesh.isGroup) target.mesh.traverse((child) => { if (child === firstIntersectedObject3D) isMatch = true; });
-            if (isMatch) { foundData = target; break; }
+    let foundInteractableThisFrame = null; 
+    let foundLookAtRotateThisFrameId = null; 
+
+    if (meshesToIntersect.length > 0) {
+        const intersects = raycaster.intersectObjects(meshesToIntersect, true);
+        if (intersects.length > 0) {
+            const firstIntersectedObject3D = intersects[0].object;
+            
+            for (const target of allPotentialTargets) {
+                let isMatch = false;
+                if (target.mesh === firstIntersectedObject3D) isMatch = true;
+                else if (target.mesh.isGroup) target.mesh.traverse((child) => { if (child === firstIntersectedObject3D) isMatch = true; });
+                
+                if (isMatch) {
+                    if (target.config.action === "rotate_on_look") {
+                        foundLookAtRotateThisFrameId = target.config.id;
+                    } else if (!foundInteractableThisFrame) { 
+                        foundInteractableThisFrame = target;
+                    }
+                    if (foundLookAtRotateThisFrameId && foundInteractableThisFrame) break;
+                }
+            }
         }
-        if (foundData) {
-            currentInteractableData = foundData;
-            let message = "";
-            switch (foundData.type) {
-                case 'toggle_visibility': message = foundData.config.message; break;
-                case 'neon_light': message = foundData.config.message; break;
-                case 'dynamic_door_interaction_volume':
-                    const doorSystem = dynamicDoors.get(foundData.config.doorWayParentName);
-                    if (doorSystem?.doorMesh?.userData.isMovable) {
-                        const ud = doorSystem.doorMesh.userData;
-                        message = `Tekan E untuk ${ud.isDoorOpen ? "tutup" : "buka"} Pintu${ud.isDoorAnimating ? " (Bergerak...)" : ""}`;
-                    } else message = "Pintu (Error)";
-                    break;
-                case 'toggle_tv_screen':
-                    let isTVOn = objectStates.get(foundData.config.id);
-                    if (isTVOn === undefined) isTVOn = foundData.config.initialState === "on";
-                    message = isTVOn ? foundData.config.messageOn : foundData.config.messageOff;
-                    break;
-                case 'start_emergency_mission':
-                    const missionActiveStateKey = foundData.config.id + "_active";
-                    const isMissionActive = objectStates.get(missionActiveStateKey);
-                    message = isMissionActive ? foundData.config.messageActive : foundData.config.messageDefault;
-                    break;
-                default: message = foundData.config.message || `Tekan ${foundData.config.triggerKey === "KeyF" ? "F" : "E"} untuk berinteraksi`;
+    }
+    
+    interactableObjectsSetup.forEach(config => {
+        if (config.action === "rotate_on_look") {
+            const state = objectStates.get(config.id);
+            if (state) {
+                const currentlyLookedAt = (config.id === foundLookAtRotateThisFrameId);
+                if (state.isLookedAt !== currentlyLookedAt) {
+                    state.isLookedAt = currentlyLookedAt;
+                }
             }
-            hintElement.textContent = message;
-            hintElement.style.display = 'block';
-        } else {
-            if (currentInteractableData || hintElement.style.display !== 'none') {
-                hintElement.style.display = 'none';
-                currentInteractableData = null;
-            }
+        }
+    });
+    
+    if (foundInteractableThisFrame) {
+        currentInteractableData = foundInteractableThisFrame;
+        let message = "";
+        switch (foundInteractableThisFrame.type) {
+            case 'toggle_visibility': message = foundInteractableThisFrame.config.message; break;
+            case 'neon_light': message = foundInteractableThisFrame.config.message; break;
+            case 'dynamic_door_interaction_volume':
+                const doorSystem = dynamicDoors.get(foundInteractableThisFrame.config.doorWayParentName);
+                if (doorSystem?.doorMesh?.userData.isMovable) {
+                    const ud = doorSystem.doorMesh.userData;
+                    message = `Tekan E untuk ${ud.isDoorOpen ? "tutup" : "buka"} Pintu${ud.isDoorAnimating ? " (Bergerak...)" : ""}`;
+                } else message = "Pintu (Error)";
+                break;
+            case 'toggle_tv_screen':
+                let isTVOn = objectStates.get(foundInteractableThisFrame.config.id);
+                message = isTVOn ? foundInteractableThisFrame.config.messageOn : foundInteractableThisFrame.config.messageOff;
+                break;
+            case 'start_emergency_mission':
+                const missionActiveStateKey = foundInteractableThisFrame.config.id + "_active";
+                const isMissionActive = objectStates.get(missionActiveStateKey);
+                message = isMissionActive ? foundInteractableThisFrame.config.messageActive : foundInteractableThisFrame.config.messageDefault;
+                break;
+            default: message = foundInteractableThisFrame.config.message || `Tekan ${foundInteractableThisFrame.config.triggerKey === "KeyF" ? "F" : "E"} untuk berinteraksi`;
+        }
+        if (hintElement) {
+             hintElement.textContent = message;
+             hintElement.style.display = 'block';
         }
     } else {
-        if (currentInteractableData || hintElement.style.display !== 'none') {
+        if (hintElement && hintElement.style.display !== 'none') {
             hintElement.style.display = 'none';
-            currentInteractableData = null;
         }
+        currentInteractableData = null;
     }
 }
 
 export function handleInteractionKeyPress(eventCode, camera, isEmergencyModeActiveGlobal) {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
-    if (!currentInteractableData) return;
+    if (!currentInteractableData) return; 
     const config = currentInteractableData.config;
-    const expectedKey = config.triggerKey || "KeyE";
+    if (config.action === "rotate_on_look" || !config.triggerKey) return; 
+
+    const expectedKey = config.triggerKey;
     if (eventCode === expectedKey) {
         if (config.action === "start_emergency_mission") {
             const missionActiveStateKey = config.id + "_active";
-            if (objectStates.get(missionActiveStateKey)) return;
+            if (objectStates.get(missionActiveStateKey)) return; 
         }
-        if (config.action === "toggle_neon_light" && isEmergencyModeActiveGlobal) return;
+        if (config.action === "toggle_neon_light" && isEmergencyModeActiveGlobal) return; 
+        
         performInteraction(camera, isEmergencyModeActiveGlobal);
     }
 }
 
 function performInteraction(camera, isEmergencyModeActiveGlobal) {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
     if (!currentInteractableData) return;
     const currentObjectFullConfig = currentInteractableData.config; 
+    if (currentObjectFullConfig.action === "rotate_on_look") return;
+
     switch (currentObjectFullConfig.action) {
         case "toggle_visibility":
             const modelDataVis = loadedModels.get(currentObjectFullConfig.targetModelId);
@@ -324,7 +389,6 @@ function performInteraction(camera, isEmergencyModeActiveGlobal) {
                     const materialToModify = getOrCloneMaterialForObject(tvScreenMesh, currentObjectFullConfig.id);
                     if (materialToModify) {
                         let currentTVStateIsOn = objectStates.get(currentObjectFullConfig.id);
-                        if (currentTVStateIsOn === undefined) currentTVStateIsOn = currentObjectFullConfig.initialState === "on";
                         const newTVStateIsOn = !currentTVStateIsOn;
                         const materialUserConfigToApply = newTVStateIsOn ? currentObjectFullConfig.onMaterialConfig : currentObjectFullConfig.offMaterialConfig;
                         applyTVMaterialProperties(materialToModify, materialUserConfigToApply, newTVStateIsOn, currentObjectFullConfig);
@@ -356,11 +420,45 @@ function performInteraction(camera, isEmergencyModeActiveGlobal) {
         default:
             console.warn(`[PerformInteraction] Unknown action: ${currentObjectFullConfig.action}`);
     }
-    if (camera) updateInteractionHint(camera, isEmergencyModeActiveGlobal);
+    if (camera) updateInteractionHint(camera, isEmergencyModeActiveGlobal); 
+}
+
+export function updateAutoRotateOnLookObjects(delta) {
+    interactableObjectsSetup.forEach(config => {
+        if (config.action === "rotate_on_look") {
+            const state = objectStates.get(config.id);
+            // Pastikan semua state yang dibutuhkan ada
+            if (!state || !state.mesh || !state.initialQuaternion || !state.targetQuaternion || !state.config) {
+                // console.warn(`[AutoRotate] State tidak lengkap untuk ${config.id}`);
+                return;
+            }
+
+            const mesh = state.mesh;
+            const speedFactor = state.config.rotationSpeedFactor !== undefined ? state.config.rotationSpeedFactor : 0.05; // Default speed factor
+
+            if (state.isLookedAt) {
+                // Jika dilihat, slerp menuju targetQuaternion
+                if (!mesh.quaternion.equals(state.targetQuaternion)) {
+                    mesh.quaternion.slerp(state.targetQuaternion, speedFactor);
+                    // Jika sudah sangat dekat, set langsung untuk menghindari getaran kecil
+                    if (mesh.quaternion.angleTo(state.targetQuaternion) < 0.001) {
+                        mesh.quaternion.copy(state.targetQuaternion);
+                    }
+                }
+            } else {
+                // Jika tidak dilihat, slerp kembali ke initialQuaternion
+                if (!mesh.quaternion.equals(state.initialQuaternion)) {
+                    mesh.quaternion.slerp(state.initialQuaternion, speedFactor);
+                    if (mesh.quaternion.angleTo(state.initialQuaternion) < 0.001) {
+                        mesh.quaternion.copy(state.initialQuaternion);
+                    }
+                }
+            }
+        }
+    });
 }
 
 export function resetAllToNormalState() {
-    // ... (SAMA seperti versi yang Anda berikan sebelumnya)
     console.log("[IntHandler] Mereset semua sistem neon ke kondisi normal.");
     neonLightSystems.forEach((system, key) => {
         system.light.color.setHex(system.originalLightColorHex);
@@ -381,6 +479,12 @@ export function resetAllToNormalState() {
         if (config.action === "start_emergency_mission") {
             objectStates.set(config.id + "_active", false);
         }
+        if (config.action === "rotate_on_look") {
+            const state = objectStates.get(config.id);
+            if (state && state.mesh && state.initialQuaternion) {
+                state.mesh.quaternion.copy(state.initialQuaternion);
+                state.isLookedAt = false; 
+            }
+        }
     });
 }
-

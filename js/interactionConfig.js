@@ -8,7 +8,7 @@ export const interactableObjectsSetup = [
         action: "toggle_visibility",
         affectedMeshNames: ["Globe_Objet_0"],
         message: "Tekan E untuk tampilkan/sembunyikan Globe",
-        triggerKey: "KeyE" // Tambahkan triggerKey default
+        triggerKey: "KeyE"
     },
     {
         id: "missionHoloInteraction",
@@ -96,15 +96,26 @@ export const interactableObjectsSetup = [
         messageOff: "Tekan E untuk nyalakan TV (Ecran6)",
         triggerKey: "KeyE"
     },
-    // BARU: Interaksi untuk Panel Kontrol Misi
+    // Interaksi untuk Panel Kontrol Misi
     {
         id: "missionControlPanelInteraction",
-        targetModelId: "spaceStation", // Pastikan ID model tempat panel berada
-        meshNames: ["Panneau_control_Objet2_0"], // Nama mesh panel kontrol
+        targetModelId: "spaceStation", 
+        meshNames: ["Panneau_control_Objet2_0"], 
         action: "start_emergency_mission",
         messageDefault: "Tekan F untuk MULAI MISI DARURAT",
         messageActive: "MISI DARURAT AKTIF! (Tekan L untuk Batal)",
-        triggerKey: "KeyF" // Tombol F untuk memicu
+        triggerKey: "KeyF"
+    },
+    // Interaksi untuk Sofa dengan batasan rotasi
+    {
+        id: "sofaRotationInteraction",
+        targetModelId: "spaceStation",
+        meshNames: ["Sofa_Objet_0"], 
+        action: "rotate_on_look",
+        rotationAxis: "y",          // Sumbu LOKAL objek ('x', 'y', atau 'z')
+        rotationSpeedFactor: 0.01,  // Faktor kecepatan slerp (misal: 0.01 - 0.1)
+        maxRotationAngle: 85,       // Batas rotasi dalam DERAJAT dari posisi awal
+        rotationDirection: 1        // Arah rotasi: 1 untuk positif, -1 untuk negatif (opsional, default 1)
     }
 ];
 
@@ -113,9 +124,7 @@ export const interactionSettings = {
     hintElementId: "interaction-hint"
 };
 
-// BARU: Warna untuk mode darurat
 export const emergencySettings = {
-    lightColor: 0xff0000, // Merah
-    blinkInterval: 500, //ms (0.5 detik nyala, 0.5 detik mati)
-    // Intensitas bisa diambil dari original, atau override di sini
+    lightColor: 0xff0000, 
+    blinkInterval: 500, 
 };
