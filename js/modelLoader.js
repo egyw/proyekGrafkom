@@ -16,7 +16,7 @@ async function initializeDoorMaterial(texturePath) {
     console.log(`[MatInit] Mencoba inisialisasi material pintu dengan path: "${texturePath}"`);
     if (texturePath) {
         try {
-            const texture = await textureLoader.loadAsync(texturePath);
+            const texture = await textureLoader.loadAsync("source/door_metal_panel.png");
             texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
             sharedDoorMaterial = new THREE.MeshStandardMaterial({
                 map: texture, metalness: 0.7, roughness: 0.5, side: THREE.DoubleSide
