@@ -116,6 +116,17 @@ export const interactableObjectsSetup = [
         rotationSpeedFactor: 0.01,  // Faktor kecepatan slerp (misal: 0.01 - 0.1)
         maxRotationAngle: 85,       // Batas rotasi dalam DERAJAT dari posisi awal
         rotationDirection: 1        // Arah rotasi: 1 untuk positif, -1 untuk negatif (opsional, default 1)
+    },
+
+    // BARU: Interaksi untuk Wastafel (Robinet)
+    {
+        id: "sinkWaterInteraction",
+        targetModelId: "spaceStation",     // Pastikan ini ID model tempat wastafel berada
+        meshNames: ["Robinet1_Objet3_0"],  // Nama mesh wastafel (keran) dari GLB Anda
+        action: "toggle_sink_water",       // Aksi baru
+        messageOn: "Tekan E untuk matikan air",
+        messageOff: "Tekan E untuk nyalakan air",
+        triggerKey: "KeyE"                 // Tombol pemicu
     }
 ];
 
