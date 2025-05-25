@@ -7,31 +7,35 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- BARU: Loading Screen -->
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <p id="loading-text">MEMUAT...</p> 
+    </div>
+
     <div id="blocker">
-        <div id="instructions"> <!-- Container utama yang akan dipusatkan oleh #blocker -->
-            <div id="main-instructions">
-                <!-- Pastikan class play-button-style ada di sini juga -->
-                <span id="play-button-text" class="play-button-style">Klik untuk Bermain</span>
-                <br /><br />
-                Gerak: W, A, S, D<br/>
-                Lihat: Mouse<br/>
-                Lari: Shift<br/>
-                Interaksi: E<br/>
-                Toggle FPS: P<br/>
-                Toggle Ghost Mode (Noclip): G
-            </div>
-            <div id="ghost-mode-pause-instructions" style="display:none;">
-                <!-- TAMBAHKAN CLASS DI SINI -->
-                <span id="resume-ghost-button-text" class="play-button-style">Klik untuk Lanjut</span>
-                <br /><br />
-                --- GHOST MODE AKTIF (PAUSE) ---<br/>
-                Gerak Horizontal: W, A, S, D<br/>
-                Lari: Shift<br/>
-                Naik: Spasi<br/>
-                Turun: Ctrl<br/>
-                Toggle Ghost Mode: G
-            </div>
-            <!-- Elemen untuk pesan error akan ditambahkan oleh JS jika perlu -->
+        <div id="instructions"> 
+            <!-- play-button-text akan diisi oleh JS saat loading selesai atau untuk instruksi -->
+            <span id="play-button-text" class="play-button-style"></span> 
+            <br /><br />
+            Gerak: W, A, S, D<br/>
+            Lihat: Mouse<br/>
+            Lari: Shift<br/>
+            Interaksi Umum: E<br/>
+            Interaksi Spesifik: F (jika ada)<br/>
+            Toggle FPS: P<br/>
+            Toggle Ghost Mode (Noclip): G<br/>
+            Batalkan Misi Darurat: L (jika aktif)
+        </div>
+        <div id="ghost-mode-pause-instructions" style="display:none;">
+            <span id="resume-ghost-button-text" class="play-button-style">Klik untuk Lanjut</span>
+            <br /><br />
+            --- GHOST MODE AKTIF (PAUSE) ---<br/>
+            Gerak Horizontal: W, A, S, D<br/>
+            Lari: Shift<br/>
+            Naik: Spasi<br/>
+            Turun: Ctrl<br/>
+            Toggle Ghost Mode: G
         </div>
     </div>
 
@@ -41,6 +45,11 @@
         Naik: Spasi<br/>
         Turun: Ctrl<br/>
         Toggle: G
+    </div>
+
+    <div id="emergency-mode-hud" style="display:none;">
+        <strong>MODE DARURAT AKTIF</strong><br/>
+        Tekan L untuk Batalkan
     </div>
 
     <div id="webgl-container"></div>

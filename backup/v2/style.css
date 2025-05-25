@@ -1,0 +1,155 @@
+body {
+    margin: 0;
+    overflow: hidden; /* Mencegah scrollbar */
+    font-family: Arial, sans-serif;
+    background-color: #000; /* Latar belakang default jika webgl-container belum termuat */
+}
+
+#webgl-container {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+}
+
+#blocker {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.75); /* Sedikit lebih gelap agar kontras dengan box instruksi */
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    z-index: 200; 
+}
+
+#instructions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 30px 40px; /* Padding lebih besar */
+    background-color: rgba(25, 28, 38, 0.92); /* Warna latar box yang lebih gelap dan solid */
+    border-radius: 12px; 
+    box-shadow: 0 5px 25px rgba(0,0,0,0.6); 
+    color: #E0E0E0; /* Warna teks dasar yang lebih lembut */
+    font-size: 16px; 
+    max-width: 500px; /* Batasi lebar box instruksi */
+    border: 1px solid rgba(100, 255, 218, 0.2); /* Border tipis dengan warna aksen */
+}
+
+#main-instructions, 
+#ghost-mode-pause-instructions {
+    line-height: 1.7; /* Jarak antar baris yang lebih nyaman */
+    color: #C5C8D3; /* Warna teks untuk detail instruksi */
+}
+
+#main-instructions br,
+#ghost-mode-pause-instructions br {
+    margin-bottom: 5px; /* Sedikit spasi setelah <br> */
+}
+
+/* Styling untuk judul di dalam instruksi pause Ghost Mode */
+#ghost-mode-pause-instructions strong, /* Jika Anda menambahkan tag <strong> */
+#ghost-mode-pause-instructions .instruction-title { /* Atau menggunakan class */
+    color: #64FFDA; /* Warna aksen */
+    font-weight: bold;
+    font-size: 18px;
+    display: block;
+    margin-bottom: 15px; /* Jarak dari judul ke detail */
+}
+
+
+/* Tombol "Klik untuk Bermain/Lanjut" */
+.play-button-style { 
+    font-size: 32px; /* Sedikit lebih kecil dari sebelumnya agar proporsional */
+    font-weight: bold;
+    color: #64FFDA; 
+    padding: 12px 25px;
+    border: 2px solid #64FFDA;
+    border-radius: 8px;
+    background-color: rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: background-color 0.2s ease-out, color 0.2s ease-out, transform 0.1s ease-out;
+    display: inline-block; 
+    margin-bottom: 25px; /* Jarak yang lebih jelas */
+    text-transform: uppercase; /* Teks menjadi kapital */
+    letter-spacing: 1px; /* Sedikit spasi antar huruf */
+}
+
+.play-button-style:hover {
+    background-color: #64FFDA;
+    color: #191C26; /* Warna teks saat hover (sesuaikan dengan background #instructions) */
+    transform: scale(1.03); 
+    box-shadow: 0 0 15px rgba(100, 255, 218, 0.5); /* Efek glow saat hover */
+}
+
+#interaction-hint {
+    position: absolute;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 15px;
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    border-radius: 5px;
+    font-size: 14px;
+    display: none;
+    z-index: 100;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#fps-counter {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 6px 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #E0E0E0;
+    font-size: 14px;
+    z-index: 100;
+    display: none;
+    border-radius: 3px;
+}
+
+#ghost-mode-hud {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 10px 15px;
+    background-color: rgba(30, 30, 40, 0.85);
+    color: #D5D8DE;
+    border: 1px solid rgba(100, 255, 218, 0.4);
+    border-radius: 5px;
+    font-size: 13px;
+    line-height: 1.6;
+    z-index: 101;
+    display: none;
+    text-align: left;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+}
+
+#ghost-mode-hud strong {
+    color: #64FFDA;
+    font-size: 14px; /* Sedikit lebih besar untuk judul HUD */
+    display: block;
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(100, 255, 218, 0.2); /* Garis bawah tipis */
+    padding-bottom: 4px;
+}
+
+/* Styling untuk pesan error di dalam #instructions */
+#error-display-message {
+    margin-top: 20px; 
+    padding: 15px;
+    background-color: rgba(80, 20, 20, 0.8); /* Latar merah gelap untuk error */
+    border: 1px solid rgba(255, 80, 80, 0.7);
+    border-radius: 5px;
+    color: white;
+}
+
+#error-display-message span:first-child { /* Untuk tulisan "ERROR:" */
+    font-weight: bold;
+    font-size: 20px;
+}
