@@ -2,14 +2,35 @@
 import * as THREE from 'three';
 import { sceneConfig, cameraConfig } from './config.js';
 
-// UBAH: Deklarasikan di sini agar bisa diekspor
 export let scene, camera, renderer;
-let pmremGenerator;
+let pmremGenerator; // Tetap ada jika Anda ingin scene.environment untuk refleksi
 
 export function initScene() {
-    scene = new THREE.Scene(); // Inisialisasi di sini
-    scene.background = new THREE.Color(sceneConfig.backgroundColor);
+    scene = new THREE.Scene();
+
+    // === PENGATURAN BACKGROUND DENGAN TEKSTUR PANORAMA ===
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(
+        'source/space.png', // Pastikan path ini benar
+        function ( texture ) {
+            // Atur mapping agar sesuai untuk background environment
+            texture.mapping = THREE.EquirectangularReflectionMapping; // Atau THREE.EquirectangularUVMapping
+                                                                    // Coba keduanya jika satu tidak terlihat benar
+            scene.background = texture;
+            console.log("[SceneSetup] Tekstur background 'source/space.png' dimuat dan diterapkan.");
+        },
+        undefined, // onProgress callback
+        function ( err ) {
+            console.error( '[SceneSetup] Gagal memuat tekstur background "source/space.png":', err );
+            // Fallback ke warna solid jika tekstur gagal dimuat
+            scene.background = new THREE.Color(0x00000a); // Warna ruang angkasa yang sangat gelap
+        }
+    );
+    // =======================================================
+
     if (sceneConfig.fog) {
+        // Fog mungkin tidak terlalu terlihat dengan background panorama,
+        // tapi bisa dipertahankan jika ada efek atmosfer yang diinginkan.
         scene.fog = new THREE.Fog(sceneConfig.fog.color, sceneConfig.fog.near, sceneConfig.fog.far);
     }
 
@@ -24,45 +45,38 @@ export function initScene() {
     const container = document.getElementById('webgl-container');
     renderer = new THREE.WebGLRenderer({
         antialias: true,
-        logarithmicDepthBuffer: true // Coba true jika ada z-fighting pada jarak jauh
+        logarithmicDepthBuffer: true
     });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace; // Dulu outputEncoding
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2; // Sesuaikan untuk kecerahan scene
+    renderer.toneMappingExposure = 1.2;
 
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Atau VSMShadowMap untuk kualitas lebih tinggi
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    // Environment map (IBL) untuk pencahayaan yang lebih realistis
+    // Environment map untuk refleksi objek (opsional, bisa berbeda dari background)
     pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader(); // Pre-compile shader
-    // Buat environment map sederhana jika tidak ada HDR/EXR
+    pmremGenerator.compileEquirectangularShader();
+    // Anda bisa menggunakan tekstur space.png yang sama untuk environment jika cocok,
+    // atau environment map yang lebih sederhana/berbeda.
+    // Untuk sekarang, kita buat environment gelap standar.
     const darkEnvScene = new THREE.Scene();
-    darkEnvScene.background = new THREE.Color(0x050505); // Warna environment gelap
-    scene.environment = pmremGenerator.fromScene(darkEnvScene, 0.04).texture; // 0.04 adalah roughness environment
+    darkEnvScene.background = new THREE.Color(0x030303);
+    scene.environment = pmremGenerator.fromScene(darkEnvScene, 0.04).texture;
+    // Jika ingin menggunakan space.png juga untuk environment (refleksi):
+    // textureLoader.load('source/space.png', function(envTexture) {
+    //     envTexture.mapping = THREE.EquirectangularReflectionMapping;
+    //     scene.environment = envTexture; // Gunakan untuk refleksi
+    // });
 
-    // Ambient Light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); // Warna, Intensitas
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Sesuaikan intensitas ambient
     scene.add(ambientLight);
 
-    // Contoh Directional Light (untuk bayangan)
-    // const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    // directionalLight.position.set(5, 10, 7.5);
-    // directionalLight.castShadow = true;
-    // directionalLight.shadow.mapSize.width = 2048; // Resolusi bayangan
-    // directionalLight.shadow.mapSize.height = 2048;
-    // directionalLight.shadow.camera.near = 0.5;
-    // directionalLight.shadow.camera.far = 50;
-    // scene.add(directionalLight);
-    // const shadowHelper = new THREE.CameraHelper(directionalLight.shadow.camera); // Debug bayangan
-    // scene.add(shadowHelper);
-
-
     window.addEventListener('resize', onWindowResize, false);
-    // Tidak perlu return { scene, camera, renderer } jika sudah diekspor
 }
 
 function onWindowResize() {
@@ -78,7 +92,25 @@ export function disposeScene() {
         pmremGenerator.dispose();
         console.log("PMREMGenerator disposed.");
     }
-    // Anda juga bisa menambahkan dispose untuk material, geometri, tekstur jika diperlukan saat scene diganti
+    if (scene.background && scene.background.isTexture) {
+        scene.background.dispose(); // Dispose tekstur background
+        console.log("Tekstur background di-dispose.");
+    }
+    if (scene.environment && scene.environment.isTexture) {
+        scene.environment.dispose(); // Dispose tekstur environment
+        console.log("Tekstur environment di-dispose.");
+    }
+    // Hapus juga partikel bintang jika masih ada dari implementasi Metode 3 sebelumnya
+    const starsObject = scene.getObjectByProperty('type', 'Points');
+    if (starsObject) {
+        if (starsObject.geometry) starsObject.geometry.dispose();
+        if (starsObject.material) {
+            if (starsObject.material.map) starsObject.material.map.dispose();
+            starsObject.material.dispose();
+        }
+        scene.remove(starsObject);
+        console.log("Objek partikel bintang sebelumnya di-dispose dan dihapus.");
+    }
 }
 
-// 'scene', 'camera', 'renderer' sudah diekspor karena deklarasi 'export let' di atas.
+// 'scene', 'camera', 'renderer' sudah diekspor
