@@ -10,7 +10,7 @@ export const modelsToLoad = [
         doubleSidedMeshNames: ["Room_Room_Room1_0"], // Ganti dengan nama mesh ruangan Anda jika perlu
         dynamicDoorConfig: {
             // doorWayMeshNamePattern: "DoorWay", // Tidak lagi primer, tapi bisa disimpan untuk referensi
-            doorTexturePath: "/source/door_metal_panel.png", // Atau "textures/door_metal_panel.png"
+            doorTexturePath: "source/door_metal_panel.png", // Atau "textures/door_metal_panel.png"
             doorWidth: 2.1,
             doorHeight: 3.15,
             doorThickness: 0.08,
