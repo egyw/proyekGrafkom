@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { modelsToLoad, playerConfig } from './config.js';
 import { initScene, scene, camera, renderer } from './sceneSetup.js';
-import { loadGLBModel, loadedModels, updateAnimatedMeshes } from './modelLoader.js';
+import { loadGLBModel, loadedModels, updateAnimatedMeshes, cleanupDoorTimers } from './modelLoader.js';
 import { setupPointerLockControls, updatePlayerMovement, setNoclipState, handleKeyDown, handleKeyUp } from './controls.js';
 import { 
     initInteractionHandler, 
@@ -114,6 +114,7 @@ async function init() {
         animate();
 
     } catch (error) {
+        cleanupDoorTimers(); // Clean up any door timers
         console.error("Terjadi kesalahan saat inisialisasi atau pemuatan:", error);
         displayErrorToUser(`Gagal inisialisasi: ${error.message || 'Kesalahan tidak diketahui'}.`);
         if (loadingScreenElement) loadingScreenElement.style.display = 'none';
@@ -340,6 +341,10 @@ function displayErrorToUser(message) {
         alert(`ERROR: ${message}\nRefresh halaman atau cek konsol (F12).`);
     }
 }
+
+window.addEventListener('beforeunload', () => {
+    cleanupDoorTimers();
+});
 
 init().catch(error => {
     console.error("Kegagalan inisialisasi global:", error);

@@ -216,8 +216,12 @@ function createDynamicDoor(doorWayNameKey, fullDoorSetup, scene) { // Hapus coll
     console.groupEnd();
 }
 
+// Adding automatic door closing functionality
+
+export const doorTimers = new Map(); // To store door closing timers
+
 export function toggleMovableMeshState(doorWayNameKey, isDynamicDoor = false) {
-    // ... (Fungsi ini sama seperti versi terakhir, menggunakan doorWayNameKey)
+    // ... (Existing code)
     console.log(`[ToggleState] Dipanggil untuk: ${doorWayNameKey}, isDynamic: ${isDynamicDoor}`);
     if (!isDynamicDoor) return null;
     const doorSystem = dynamicDoors.get(doorWayNameKey);
@@ -226,11 +230,46 @@ export function toggleMovableMeshState(doorWayNameKey, isDynamicDoor = false) {
     console.log(`[ToggleState] Mesh pintu yang akan dianimasikan: ${meshToAnimate.name}`);
     if (!meshToAnimate.userData.isMovable) { console.warn(`[ToggleState] Pintu "${meshToAnimate.name}" tidak movable.`); return null; }
     if (meshToAnimate.userData.isDoorAnimating) { console.log(`[ToggleState] Pintu "${meshToAnimate.name}" sudah beranimasi.`); return meshToAnimate.userData.isDoorOpen; }
+    
+    // Clear existing timer if one exists
+    if (doorTimers.has(doorWayNameKey)) {
+        clearTimeout(doorTimers.get(doorWayNameKey));
+        doorTimers.delete(doorWayNameKey);
+        console.log(`[ToggleState] Timer penutupan otomatis untuk pintu "${meshToAnimate.name}" dihapus.`);
+    }
+    
     meshToAnimate.userData.isDoorOpen = !meshToAnimate.userData.isDoorOpen;
     meshToAnimate.userData.isDoorAnimating = true;
     meshToAnimate.userData.animationProgress = 0;
-    console.log(`[ToggleState] Animasi pintu "${meshToAnimate.name}" dimulai. Target baru: ${meshToAnimate.userData.isDoorOpen ? 'TERBUKA' : 'TERTUTUP'}`);
+    
+    // Set a timer to close the door after 3 seconds if it was just opened
+    if (meshToAnimate.userData.isDoorOpen) {
+        console.log(`[ToggleState] Pintu "${meshToAnimate.name}" TERBUKA, akan menutup otomatis dalam 3 detik.`);
+        const timer = setTimeout(() => {
+            if (meshToAnimate.userData.isDoorOpen && !meshToAnimate.userData.isDoorAnimating) {
+                console.log(`[AutoClose] Menutup pintu "${meshToAnimate.name}" secara otomatis setelah 3 detik.`);
+                meshToAnimate.userData.isDoorOpen = false;
+                meshToAnimate.userData.isDoorAnimating = true;
+                meshToAnimate.userData.animationProgress = 0;
+            }
+            doorTimers.delete(doorWayNameKey);
+        }, 3000); // 3 seconds
+        
+        doorTimers.set(doorWayNameKey, timer);
+    } else {
+        console.log(`[ToggleState] Animasi pintu "${meshToAnimate.name}" dimulai. Target baru: TERTUTUP`);
+    }
+    
     return meshToAnimate.userData.isDoorOpen;
+}
+
+// Also need to modify function to clean up timers when scene is disposed
+export function cleanupDoorTimers() {
+    doorTimers.forEach((timer, doorWayNameKey) => {
+        clearTimeout(timer);
+        console.log(`[Cleanup] Timer untuk pintu "${doorWayNameKey}" dihapus.`);
+    });
+    doorTimers.clear();
 }
 
 export function updateAnimatedMeshes(delta) {
