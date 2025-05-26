@@ -1,9 +1,11 @@
 // js/main.js
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { modelsToLoad, playerConfig } from './config.js';
-import { initScene, scene, camera, renderer } from './sceneSetup.js';
-import { loadGLBModel, loadedModels, updateAnimatedMeshes, cleanupDoorTimers } from './modelLoader.js';
-import { setupPointerLockControls, updatePlayerMovement, setNoclipState, handleKeyDown, handleKeyUp } from './controls.js';
+import { initScene, scene, camera, renderer, disposeScene } from './sceneSetup.js';
+import { setupPointerLockControls, handleKeyDown, handleKeyUp, updatePlayerMovement, setNoclipState, controls } from './controls.js';
+import { loadGLBModel, loadedModels, updateAnimatedMeshes, dynamicDoors, toggleMovableMeshState, cleanupDoorTimers } from './modelLoader.js';
+import { interactionSettings, emergencySettings } from './interactionConfig.js';
 import { 
     initInteractionHandler, 
     updateInteractionHint, 
@@ -11,9 +13,9 @@ import {
     handleInteractionKeyPress,
     getNeonLightSystems,
     resetAllToNormalState,
-    updateAutoRotateOnLookObjects // BARU: Impor fungsi update rotasi
+    updateAutoRotateOnLookObjects
 } from './interactionHandler.js';
-import { interactionSettings, emergencySettings } from './interactionConfig.js';
+import { initPostProcessing, updatePostProcessing, resizePostProcessing } from './postProcessing.js';
 
 let clock;
 let playerControlsInstance;
@@ -37,6 +39,10 @@ let loadingScreenElement;
 let loadingTextElement; 
 let instructionsContainer; 
 
+// Tambahkan variabel untuk efek post-processing
+let postProcessingEnabled = true;
+let postProcessingEffects;
+
 async function init() {
     loadingScreenElement = document.getElementById('loading-screen'); 
     loadingTextElement = document.getElementById('loading-text'); 
@@ -47,6 +53,9 @@ async function init() {
     if (instructionsContainer) instructionsContainer.style.display = 'none'; 
 
     initScene(); 
+
+    // Inisialisasi post-processing setelah scene & renderer dibuat
+    postProcessingEffects = initPostProcessing(renderer, scene, camera);
 
     playerControlsInstance = setupPointerLockControls(camera, renderer.domElement, scene);
     if (!playerControlsInstance) {
@@ -79,10 +88,14 @@ async function init() {
         await initInteractionHandler(); 
 
         loadedResults.forEach(result => {
-            if (!result || !result.model) return;
+            if (!result || !result.model) {
+                console.warn("Satu atau lebih model gagal memuat atau mengembalikan hasil yang tidak valid.");
+                return;
+            }
             const modelConfig = modelsToLoad.find(cfg => cfg.id === result.model.name);
             if (!modelConfig) return;
 
+            // Setup animasi dari GLTF
             if (result.mixer && result.animations && result.animations.length > 0) {
                 if (modelConfig.initialAnimation) {
                     const animConf = modelConfig.initialAnimation;
@@ -92,11 +105,23 @@ async function init() {
                         action.setLoop(animConf.loop !== undefined ? (animConf.loop ? THREE.LoopRepeat : THREE.LoopOnce) : THREE.LoopRepeat, Infinity);
                         if (animConf.loop === false) action.clampWhenFinished = true;
                         action.play();
+                    } else {
+                        console.warn(`Animasi "${animConf.name}" tidak ditemukan untuk model "${modelConfig.id}".`);
                     }
                 } else if (result.animations.length > 0) {
-                    result.mixer.clipAction(result.animations[0]).setLoop(THREE.LoopRepeat, Infinity).play();
+                    const action = result.mixer.clipAction(result.animations[0]);
+                    action.setLoop(THREE.LoopRepeat, Infinity).play();
                 }
             }
+
+            // Setup pintu dinamis
+            if (modelConfig.dynamicDoorConfig && modelConfig.dynamicDoorConfig.doors) {
+                for (const [doorWayNameKey, doorSetup] of Object.entries(modelConfig.dynamicDoorConfig.doors)) {
+                    console.log(`Membuat pintu dinamis untuk kunci: ${doorWayNameKey}`);
+                }
+            }
+
+            // Setup lampu neon khusus untuk model space station
             if (modelConfig.id === "spaceStation") {
                 createNeonLightsFromModel(modelConfig.id, result.model);
             }
@@ -109,12 +134,11 @@ async function init() {
         const playButtonText = document.getElementById('play-button-text');
         if (playButtonText) playButtonText.textContent = "Klik untuk Bermain";
 
-
         updateUIVisibility();
         animate();
 
     } catch (error) {
-        cleanupDoorTimers(); // Clean up any door timers
+        cleanupDoorTimers();
         console.error("Terjadi kesalahan saat inisialisasi atau pemuatan:", error);
         displayErrorToUser(`Gagal inisialisasi: ${error.message || 'Kesalahan tidak diketahui'}.`);
         if (loadingScreenElement) loadingScreenElement.style.display = 'none';
@@ -124,12 +148,19 @@ async function init() {
 
 function onDocumentKeyDown(event) {
     if (!playerControlsInstance) return;
+    handleKeyDown(event);
     if (event.code === 'KeyP') toggleFPSCounter();
     if (playerControlsInstance.isLocked) {
         if (event.code === 'KeyG') toggleGhostMode();
-        else if (event.code === 'KeyF' || event.code === 'KeyE') handleInteractionKeyPress(event.code, playerControlsInstance.getObject(), isEmergencyModeActive);
-        else if (event.code === 'KeyL') { if (isEmergencyModeActive) setEmergencyModeActive(false); }
-        else handleKeyDown(event);
+        else if (event.code === 'KeyO') {
+            // Toggle post-processing effects with O key
+            postProcessingEnabled = !postProcessingEnabled;
+            console.log(`Post-processing effects ${postProcessingEnabled ? 'enabled' : 'disabled'}`);
+        }
+        handleInteractionKeyPress(event.code, camera, isEmergencyModeActive);
+        if (event.code === 'KeyL' && isEmergencyModeActive) {
+            setEmergencyModeActive(false);
+        }
     }
 }
 
@@ -152,10 +183,11 @@ export function setEmergencyModeActive(isActive) {
         lastEmergencyBlinkTime = clock.elapsedTime * 1000;
         if (emergencyModeHudElement) {
             emergencyModeHudElement.style.display = 'block';
+            // Auto-hide emergency HUD after 10 seconds
             emergencyHudTimeoutId = setTimeout(() => {
-                if (emergencyModeHudElement && isEmergencyModeActive) emergencyModeHudElement.style.display = 'none';
+                if (emergencyModeHudElement) emergencyModeHudElement.style.display = 'none';
                 emergencyHudTimeoutId = null;
-            }, 3000);
+            }, 10000);
         }
     }
     updateUIVisibility();
@@ -174,9 +206,7 @@ function updateInstructionsVisibility() {
                 ghostModePauseInstructionsElement.style.display = 'none';
             }
         } else if (!blockerIsVisible) {
-            // Game berjalan
-        } else {
-             if (instructionsContainer) instructionsContainer.style.display = 'none';
+            instructionsContainer.style.display = 'none';
         }
     }
 }
@@ -230,20 +260,27 @@ function createNeonLightsFromModel(modelId, modelInstance) {
             const pointLight = new THREE.PointLight(initialColor.getHex(), initialIntensity, 12.0, 2.0 );
             pointLight.position.copy(worldPosition);
             scene.add(pointLight);
-            registerNeonLight(modelId, meshName, pointLight, neonMesh); 
+            registerNeonLight(modelId, meshName, pointLight, neonMesh);
+            
+            // Tingkatkan emissive intensity untuk efek glow yang lebih baik
             const setupEmissiveMaterial = (originalMaterial) => {
                 const clonedMaterial = originalMaterial.isCloned ? originalMaterial : originalMaterial.clone();
                 if (clonedMaterial.isMeshStandardMaterial || clonedMaterial.isMeshPhysicalMaterial) {
-                    if (!clonedMaterial.emissive) clonedMaterial.emissive = new THREE.Color(initialColor);
-                    else clonedMaterial.emissive.copy(initialColor);
-                    clonedMaterial.emissiveIntensity = initialEmissiveIntensityMesh;
-                    clonedMaterial.toneMapped = false; 
-                } else if (clonedMaterial.isMeshBasicMaterial) clonedMaterial.color.copy(initialColor);
-                clonedMaterial.needsUpdate = true;
+                    if (clonedMaterial.emissive) {
+                        // Tingkatkan emissive intensity untuk efek glow yang lebih baik
+                        clonedMaterial.emissiveIntensity = 1.5; // Nilai lebih tinggi untuk glow lebih kuat
+                    }
+                }
                 return clonedMaterial;
             };
-            if (Array.isArray(neonMesh.material)) neonMesh.material = neonMesh.material.map(mat => setupEmissiveMaterial(mat));
-            else neonMesh.material = setupEmissiveMaterial(neonMesh.material);
+            
+            if (neonMesh.material) {
+                if (Array.isArray(neonMesh.material)) {
+                    neonMesh.material = neonMesh.material.map(setupEmissiveMaterial);
+                } else {
+                    neonMesh.material = setupEmissiveMaterial(neonMesh.material);
+                }
+            }
         }
     });
 }
@@ -283,25 +320,30 @@ function animate() {
 
     if (playerControlsInstance && playerControlsInstance.isLocked) {
         updateInteractionHint(playerControlsInstance.getObject(), isEmergencyModeActive);
-        updateAutoRotateOnLookObjects(delta); // BARU: Update rotasi objek yang dilihat
+        updateAutoRotateOnLookObjects(delta);
     } else {
         const hintElem = document.getElementById(interactionSettings.hintElementId);
         if (hintElem) hintElem.style.display = 'none';
         // Saat tidak terkunci, pastikan objek 'rotate_on_look' tidak dianggap 'isLookedAt'
-        // dan kembali ke posisi awal. `updateAutoRotateOnLookObjects` sudah menangani ini
-        // jika `isLookedAt` di-set false oleh `updateInteractionHint`
-        updateAutoRotateOnLookObjects(delta); // Tetap update agar kembali ke posisi awal
+        updateAutoRotateOnLookObjects(delta);
     }
 
     updateUIVisibility(); 
     
     for (const loadedData of loadedModels.values()) {
-        if (loadedData.mixer) loadedData.mixer.update(delta);
+        if (loadedData.mixer) {
+            loadedData.mixer.update(delta);
+        }
     }
 
     if (isEmergencyModeActive) updateEmergencyLightsVisuals();
 
-    renderer.render(scene, camera);
+    // Render dengan post-processing jika diaktifkan, atau render normal jika tidak
+    if (postProcessingEnabled && postProcessingEffects) {
+        updatePostProcessing();
+    } else {
+        renderer.render(scene, camera);
+    }
 
     if (showFPS && fpsCounterElement) {
         frameCount++;
@@ -319,26 +361,20 @@ function displayErrorToUser(message) {
     const mainInstructions = document.getElementById('main-instructions');
     const ghostModePauseInstructions = document.getElementById('ghost-mode-pause-instructions');
     
-    if (blocker && instructionsContainer) { // instructionsContainer sudah global
-        blocker.style.display = 'flex'; 
-        instructionsContainer.style.display = 'flex'; 
-        if(mainInstructions) mainInstructions.style.display = 'none';
-        if(ghostModePauseInstructions) ghostModePauseInstructions.style.display = 'none';
-        if(ghostModeHudElement) ghostModeHudElement.style.display = 'none';
-        if(emergencyModeHudElement) emergencyModeHudElement.style.display = 'none';
-        if(loadingScreenElement && loadingScreenElement.style.display !== 'none') loadingScreenElement.style.display = 'none';
-
-        let errorDisplay = document.getElementById('error-display-message');
-        if (!errorDisplay) {
-            errorDisplay = document.createElement('div');
-            errorDisplay.id = 'error-display-message';
-            errorDisplay.style.textAlign = 'center';
-            instructionsContainer.appendChild(errorDisplay);
-        }
-        errorDisplay.innerHTML = `<span style="font-size:20px; color:red;">ERROR:</span><br>${message}<br><br><span style="font-size:14px; color:white;">Refresh halaman atau cek konsol (F12).</span>`;
-        instructionsContainer.style.cursor = 'default';
+    if (blocker && instructionsContainer) {
+        blocker.style.display = 'flex';
+        instructionsContainer.style.display = 'flex';
+        
+        if (mainInstructions) mainInstructions.style.display = 'none';
+        if (ghostModePauseInstructions) ghostModePauseInstructions.style.display = 'none';
+        
+        const errorMessageDiv = document.createElement('div');
+        errorMessageDiv.id = 'error-display-message';
+        errorMessageDiv.innerHTML = `<span>Error</span><br />${message}<br /><br />Refresh halaman untuk mencoba lagi.`;
+        
+        instructionsContainer.appendChild(errorMessageDiv);
     } else {
-        alert(`ERROR: ${message}\nRefresh halaman atau cek konsol (F12).`);
+        alert(`Error: ${message}\nRefresh halaman untuk mencoba lagi.`);
     }
 }
 

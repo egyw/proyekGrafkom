@@ -1,6 +1,7 @@
 // js/sceneSetup.js
 import * as THREE from 'three';
 import { sceneConfig, cameraConfig } from './config.js';
+import { disposePostProcessing } from './postProcessing.js';
 
 export let scene, camera, renderer;
 let pmremGenerator; // Tetap ada jika Anda ingin scene.environment untuk refleksi
@@ -100,6 +101,7 @@ export function disposeScene() {
         scene.environment.dispose(); // Dispose tekstur environment
         console.log("Tekstur environment di-dispose.");
     }
+    
     // Hapus juga partikel bintang jika masih ada dari implementasi Metode 3 sebelumnya
     const starsObject = scene.getObjectByProperty('type', 'Points');
     if (starsObject) {
@@ -111,6 +113,9 @@ export function disposeScene() {
         scene.remove(starsObject);
         console.log("Objek partikel bintang sebelumnya di-dispose dan dihapus.");
     }
+    
+    // Dispose post-processing resources
+    disposePostProcessing();
 }
 
 // 'scene', 'camera', 'renderer' sudah diekspor
