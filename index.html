@@ -3,67 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proyek Grafika Komputer</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Game Menu Utama</title>
+    <link rel="stylesheet" href="style-menu.css">
 </head>
 <body>
-    <!-- BARU: Loading Screen -->
-    <div id="loading-screen">
-        <div class="spinner"></div>
-        <p id="loading-text">MEMUAT...</p> 
-    </div>
-
-    <div id="blocker">
-        <div id="instructions"> 
-            <!-- play-button-text akan diisi oleh JS saat loading selesai atau untuk instruksi -->
-            <span id="play-button-text" class="play-button-style"></span> 
-            <br /><br />
-            Gerak: W, A, S, D<br/>
-            Lihat: Mouse<br/>
-            Lari: Shift<br/>
-            Interaksi Umum: E<br/>
-            Interaksi Spesifik: F (jika ada)<br/>
-            Toggle FPS: P<br/>
-            Toggle Ghost Mode (Noclip): G<br/>
-            Batalkan Misi Darurat: L (jika aktif)
-        </div>
-        <div id="ghost-mode-pause-instructions" style="display:none;">
-            <span id="resume-ghost-button-text" class="play-button-style">Klik untuk Lanjut</span>
-            <br /><br />
-            --- GHOST MODE AKTIF (PAUSE) ---<br/>
-            Gerak Horizontal: W, A, S, D<br/>
-            Lari: Shift<br/>
-            Naik: Spasi<br/>
-            Turun: Ctrl<br/>
-            Toggle Ghost Mode: G
+    <div class="main-menu-container">
+        <div class="menu-title">SPACE EXPLORER</div> <!- Ganti dengan nama game Anda -->
+        <div class="menu-buttons">
+            <button id="play-button" class="menu-button">Play</button>
+            <button id="settings-button" class="menu-button">Settings</button>
+            <button id="quit-button" class="menu-button">Quit</button>
         </div>
     </div>
 
-    <div id="ghost-mode-hud" style="display:none;">
-        <strong>Ghost Mode Aktif</strong><br/>
-        Gerak: W,A,S,D + Shift<br/>
-        Naik: Spasi<br/>
-        Turun: Ctrl<br/>
-        Toggle: G
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" id="close-settings-modal">×</span>
+            <h2>Settings</h2>
+            <div class="setting-item">
+                <label for="shadow-toggle">Enable Shadows:</label>
+                <label class="switch">
+                    <input type="checkbox" id="shadow-toggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <button id="save-settings-button" class="menu-button">Apply & Close</button>
+        </div>
     </div>
 
-    <div id="emergency-mode-hud" style="display:none;">
-        <strong>MODE DARURAT AKTIF</strong><br/>
-        Tekan L untuk Batalkan
-    </div>
-
-    <div id="webgl-container"></div>
-    <div id="interaction-hint"></div>
-    <div id="fps-counter">FPS: 0</div>
-
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-    <script type="module" src="js/main.js"></script>
+    <script src="js/menu.js"></script>
 </body>
 </html>
+

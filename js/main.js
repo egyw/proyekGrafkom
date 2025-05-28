@@ -43,7 +43,27 @@ let instructionsContainer;
 let postProcessingEnabled = true;
 let postProcessingEffects;
 
+// pengaturan shadow
+let shadowsAreGloballyEnabled = false; // Default ke true, bisa diubah sesuai pengaturan menu
+
 async function init() {
+    // --- BACA PENGATURAN BAYANGAN DARI localStorage DI AWAL ---
+    const SHADOW_SETTING_KEY_FROM_MENU = 'gameEnableShadowsSetting'; // Kunci yang SAMA dengan di menu.js
+    const storedShadowSetting = localStorage.getItem(SHADOW_SETTING_KEY_FROM_MENU);
+
+    if (storedShadowSetting !== null) {
+        // Jika ada pengaturan tersimpan, gunakan itu
+        shadowsAreGloballyEnabled = (storedShadowSetting === 'true');
+    } else {
+        // Jika tidak ada pengaturan tersimpan (pertama kali main atau localStorage dihapus),
+        // Anda bisa default ke true atau false sesuai keinginan.
+        // Di sini kita default ke false, dan menu.js juga default ke false, jadi konsisten.
+        shadowsAreGloballyEnabled = false;
+        // Opsional: simpan default ini ke localStorage agar konsisten untuk selanjutnya
+        localStorage.setItem(SHADOW_SETTING_KEY_FROM_MENU, shadowsAreGloballyEnabled.toString());
+    }
+    console.log('[Main.js] Status bayangan global yang akan digunakan:', shadowsAreGloballyEnabled);
+    
     loadingScreenElement = document.getElementById('loading-screen'); 
     loadingTextElement = document.getElementById('loading-text'); 
     instructionsContainer = document.getElementById('instructions');
@@ -242,13 +262,27 @@ function createNeonLightsFromModel(modelId, modelInstance) {
         uniqueNeonObjectNames.push(`Neon${i}_Objet_0`);
     }
     const finalNeonNames = [...new Set(uniqueNeonObjectNames)];
+
+    // --- DAFTAR NAMA MESH NEON YANG TIDAK MENGHASILKAN BAYANGAN ---
+    const neonMeshesToExcludeFromShadow = [
+        // Tambahkan nama mesh neon yang ingin Anda kecualikan di sini
+        "Neon8_Objet_0",
+        "Neon7_Objet_0",
+        "Neon11_Objet_0",
+        "Neon_Objet_0",
+        "Neon_Objet_0",
+    ];
+    // -------------------------------------------------------------
+
+    let shadowCastingNeonCount = 0; // Tetap hitung untuk logging jika perlu
+
     finalNeonNames.forEach((meshName) => {
         const neonMesh = modelInstance.getObjectByName(meshName);
         if (neonMesh && neonMesh.isMesh) {
             const worldPosition = new THREE.Vector3();
             neonMesh.getWorldPosition(worldPosition);
             let initialColor = new THREE.Color(0xffffff);
-            let initialIntensity = 2.0; 
+            let initialIntensity = 2.0;
             let initialEmissiveIntensityMesh = 1.0;
             if (neonMesh.material) {
                 const mat = Array.isArray(neonMesh.material) ? neonMesh.material[0] : neonMesh.material;
@@ -257,23 +291,37 @@ function createNeonLightsFromModel(modelId, modelInstance) {
                     if (mat.emissiveIntensity !== undefined) initialEmissiveIntensityMesh = mat.emissiveIntensity;
                 }
             }
-            const pointLight = new THREE.PointLight(initialColor.getHex(), initialIntensity, 12.0, 2.0 );
+            const pointLight = new THREE.PointLight(initialColor.getHex(), initialIntensity, 12.0, 2.0);
             pointLight.position.copy(worldPosition);
+
+            // --- PENGATURAN BAYANGAN BERDASARKAN DAFTAR EXCLUDE ---
+            if (!neonMeshesToExcludeFromShadow.includes(meshName)) {
+                pointLight.castShadow = shadowsAreGloballyEnabled;
+                pointLight.shadow.mapSize.width = 512;
+                pointLight.shadow.mapSize.height = 512;
+                pointLight.shadow.camera.near = 0.1;
+                pointLight.shadow.camera.far = pointLight.distance;
+                pointLight.shadow.bias = -0.005;
+                shadowCastingNeonCount++;
+            } else {
+                pointLight.castShadow = false; // Nonaktifkan bayangan jika ada di daftar exclude
+                console.log(`[Main] Neon light "${meshName}" excluded from casting shadows.`);
+            }
+            // -------------------------------------------
+
             scene.add(pointLight);
             registerNeonLight(modelId, meshName, pointLight, neonMesh);
-            
-            // Tingkatkan emissive intensity untuk efek glow yang lebih baik
+
             const setupEmissiveMaterial = (originalMaterial) => {
                 const clonedMaterial = originalMaterial.isCloned ? originalMaterial : originalMaterial.clone();
                 if (clonedMaterial.isMeshStandardMaterial || clonedMaterial.isMeshPhysicalMaterial) {
                     if (clonedMaterial.emissive) {
-                        // Tingkatkan emissive intensity untuk efek glow yang lebih baik
-                        clonedMaterial.emissiveIntensity = 1.5; // Nilai lebih tinggi untuk glow lebih kuat
+                        clonedMaterial.emissiveIntensity = 1.5;
                     }
                 }
                 return clonedMaterial;
             };
-            
+
             if (neonMesh.material) {
                 if (Array.isArray(neonMesh.material)) {
                     neonMesh.material = neonMesh.material.map(setupEmissiveMaterial);
@@ -283,6 +331,7 @@ function createNeonLightsFromModel(modelId, modelInstance) {
             }
         }
     });
+    console.log(`[Main] Neon lights created. Shadow casting enabled for ${shadowCastingNeonCount} neons.`);
 }
 
 function updateEmergencyLightsVisuals() {

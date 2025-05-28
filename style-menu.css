@@ -1,0 +1,194 @@
+body {
+    margin: 0;
+    font-family: 'Arial', sans-serif;
+    background-image: url('source/mainPage.webp'); /* Pastikan path ini benar */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    overflow: hidden;
+}
+
+.main-menu-container {
+    background-color: rgba(0, 0, 0, 0.75);
+    padding: 40px 60px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    border: 1px solid rgba(100, 255, 218, 0.3);
+}
+
+.menu-title {
+    font-size: 3.5em;
+    margin-bottom: 40px;
+    color: #64FFDA; /* Warna aksen dari style.css Anda */
+    text-shadow: 0 0 10px #64FFDA, 0 0 20px #64FFDA, 2px 2px 5px rgba(0,0,0,0.8);
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.menu-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* Jarak antar tombol */
+}
+
+.menu-button {
+    background-color: rgba(100, 255, 218, 0.15);
+    color: #E0E0E0;
+    border: 2px solid #64FFDA;
+    padding: 15px 30px;
+    font-size: 1.3em;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+.menu-button:hover {
+    background-color: #64FFDA;
+    color: #101218; /* Warna gelap untuk kontras */
+    transform: scale(1.03);
+    box-shadow: 0 0 20px rgba(100, 255, 218, 0.7);
+}
+
+/* Modal Styling */
+.modal {
+    display: none; /* Default tersembunyi */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.7); /* Overlay gelap */
+    justify-content: center; /* Horizontal center */
+    align-items: center; /* Vertical center */
+}
+
+.modal-content {
+    background-color: #191C26; /* Background gelap untuk modal */
+    padding: 35px;
+    border: 1px solid #64FFDA;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 450px;
+    color: #E0E0E0;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+    position: relative; /* Untuk positioning close button */
+}
+
+.modal-content h2 {
+    color: #64FFDA;
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 30px;
+    font-size: 1.8em;
+}
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 32px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: #64FFDA;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(100, 255, 218, 0.2);
+}
+.setting-item:last-of-type { /* Untuk item terakhir sebelum tombol save */
+     border-bottom: none;
+     margin-bottom: 35px; /* Lebih banyak spasi sebelum tombol simpan */
+}
+
+
+.setting-item label {
+    font-size: 1.15em;
+    margin-right: 15px;
+}
+
+/* Toggle Switch Styling */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+    flex-shrink: 0; /* Mencegah switch mengecil */
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #4E5565; /* Warna off yang lebih jelas */
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: #64FFDA;
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 2px #64FFDA;
+}
+
+input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+#save-settings-button {
+    width: 100%;
+    margin-top: 10px; /* Jarak dari item terakhir */
+    padding: 12px 20px; /* Ukuran tombol simpan mungkin sedikit beda */
+    font-size: 1.1em;
+}
