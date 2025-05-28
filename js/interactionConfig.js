@@ -22,7 +22,6 @@ export const interactableObjectsSetup = [
         message: "Tekan E untuk tampilkan/sembunyikan Hologram Misi",
         triggerKey: "KeyE"
     },
-    // --- TV LAMA (Ecran2_Objet2_0) ---
     {
         id: "tvScreenToggle_Ecran2",
         targetModelId: "spaceStation",
@@ -35,7 +34,6 @@ export const interactableObjectsSetup = [
         messageOff: "Tekan E untuk nyalakan TV (Ecran2)",
         triggerKey: "KeyE"
     },
-    // --- TV LAINNYA ---
     {
         id: "tvScreenToggle_Ecran1",
         targetModelId: "spaceStation",
@@ -96,7 +94,6 @@ export const interactableObjectsSetup = [
         messageOff: "Tekan E untuk nyalakan TV (Ecran6)",
         triggerKey: "KeyE"
     },
-    // Interaksi untuk Panel Kontrol Misi
     {
         id: "missionControlPanelInteraction",
         targetModelId: "spaceStation", 
@@ -106,27 +103,24 @@ export const interactableObjectsSetup = [
         messageActive: "MISI DARURAT AKTIF! (Tekan L untuk Batal)",
         triggerKey: "KeyF"
     },
-    // Interaksi untuk Sofa dengan batasan rotasi
     {
         id: "sofaRotationInteraction",
         targetModelId: "spaceStation",
         meshNames: ["Sofa_Objet_0"], 
         action: "rotate_on_look",
-        rotationAxis: "y",          // Sumbu LOKAL objek ('x', 'y', atau 'z')
-        rotationSpeedFactor: 0.01,  // Faktor kecepatan slerp (misal: 0.01 - 0.1)
-        maxRotationAngle: 85,       // Batas rotasi dalam DERAJAT dari posisi awal
-        rotationDirection: 1        // Arah rotasi: 1 untuk positif, -1 untuk negatif (opsional, default 1)
+        rotationAxis: "y",
+        rotationSpeedFactor: 0.01,
+        maxRotationAngle: 85,
+        rotationDirection: 1
     },
-
-    // BARU: Interaksi untuk Wastafel (Robinet)
     {
         id: "sinkWaterInteraction",
-        targetModelId: "spaceStation",     // Pastikan ini ID model tempat wastafel berada
-        meshNames: ["Robinet1_Objet3_0"],  // Nama mesh wastafel (keran) dari GLB Anda
-        action: "toggle_sink_water",       // Aksi baru
+        targetModelId: "spaceStation",
+        meshNames: ["Robinet1_Objet3_0"],
+        action: "toggle_sink_water",
         messageOn: "Tekan E untuk matikan air",
         messageOff: "Tekan E untuk nyalakan air",
-        triggerKey: "KeyE"                 // Tombol pemicu
+        triggerKey: "KeyE"
     }
 ];
 
@@ -137,5 +131,5 @@ export const interactionSettings = {
 
 export const emergencySettings = {
     lightColor: 0xff0000, 
-    blinkInterval: 500, 
+    blinkInterval: 500
 };
