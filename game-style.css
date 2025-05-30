@@ -1,8 +1,8 @@
 body {
     margin: 0;
-    overflow: hidden;
+    overflow: hidden; /* Mencegah scrollbar */
     font-family: Arial, sans-serif;
-    background-color: #000;
+    background-color: #000; /* Latar belakang default jika webgl-container belum termuat */
 }
 
 #webgl-container {
@@ -136,26 +136,26 @@ body {
     padding-bottom: 4px;
 }
 
-
+/* BARU: Styling untuk HUD Mode Darurat */
 #emergency-mode-hud {
     position: absolute;
-    top: 50px; 
-    left: 10px;
+    top: 50px; /* Di bawah FPS counter jika FPS aktif, atau sesuaikan */
+    left: 10px; /* Atau kanan, atau tengah atas */
     padding: 10px 15px;
-    background-color: rgba(150, 0, 0, 0.85); 
-    color: #FFAAAA; 
+    background-color: rgba(150, 0, 0, 0.85); /* Latar merah gelap */
+    color: #FFAAAA; /* Teks merah muda */
     border: 1px solid rgba(255, 50, 50, 0.7);
     border-radius: 5px;
     font-size: 13px;
     line-height: 1.6;
-    z-index: 102;
+    z-index: 102; /* Di atas HUD lain jika perlu */
     display: none;
     text-align: left;
     box-shadow: 0 3px 8px rgba(0,0,0,0.5);
 }
 
 #emergency-mode-hud strong {
-    color: #FFDDDD; 
+    color: #FFDDDD; /* Teks judul lebih terang */
     font-size: 14px;
     font-weight: bold;
     display: block;
@@ -181,6 +181,7 @@ body {
 }
 
 
+/* loading screen */
 #loading-screen {
     position: fixed;
     top: 0;
@@ -207,7 +208,7 @@ body {
     margin-bottom: 20px;
 }
 
-#loading-text { 
+#loading-text { /* Pastikan elemen ini ada di HTML dalam #loading-screen */
     font-size: 18px;
     letter-spacing: 1px;
 }

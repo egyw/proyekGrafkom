@@ -24,32 +24,46 @@ let lastFPSTime = 0;
 let frameCount = 0;
 let showFPS = false;
 let isGhostModeActive = false;
+
 let isEmergencyModeActive = false;
 let lastEmergencyBlinkTime = 0;
 let emergencyLightVisualsOn = true;
+
 let mainInstructionsElement;
 let ghostModePauseInstructionsElement;
 let ghostModeHudElement;
 let emergencyModeHudElement;
 let emergencyHudTimeoutId = null;
+
 let loadingScreenElement; 
 let loadingTextElement; 
 let instructionsContainer; 
+
+// Tambahkan variabel untuk efek post-processing
 let postProcessingEnabled = true;
 let postProcessingEffects;
-let shadowsAreGloballyEnabled = false;
+
+// pengaturan shadow
+let shadowsAreGloballyEnabled = false; // Default ke true, bisa diubah sesuai pengaturan menu
 
 async function init() {
-    const SHADOW_SETTING_KEY_FROM_MENU = 'gameEnableShadowsSetting';
+    // --- BACA PENGATURAN BAYANGAN DARI localStorage DI AWAL ---
+    const SHADOW_SETTING_KEY_FROM_MENU = 'gameEnableShadowsSetting'; // Kunci yang SAMA dengan di menu.js
     const storedShadowSetting = localStorage.getItem(SHADOW_SETTING_KEY_FROM_MENU);
 
     if (storedShadowSetting !== null) {
+        // Jika ada pengaturan tersimpan, gunakan itu
         shadowsAreGloballyEnabled = (storedShadowSetting === 'true');
     } else {
+        // Jika tidak ada pengaturan tersimpan (pertama kali main atau localStorage dihapus),
+        // Anda bisa default ke true atau false sesuai keinginan.
+        // Di sini kita default ke false, dan menu.js juga default ke false, jadi konsisten.
         shadowsAreGloballyEnabled = false;
+        // Opsional: simpan default ini ke localStorage agar konsisten untuk selanjutnya
         localStorage.setItem(SHADOW_SETTING_KEY_FROM_MENU, shadowsAreGloballyEnabled.toString());
     }
-
+    console.log('[Main.js] Status bayangan global yang akan digunakan:', shadowsAreGloballyEnabled);
+    
     loadingScreenElement = document.getElementById('loading-screen'); 
     loadingTextElement = document.getElementById('loading-text'); 
     instructionsContainer = document.getElementById('instructions');
@@ -59,10 +73,13 @@ async function init() {
     if (instructionsContainer) instructionsContainer.style.display = 'none'; 
 
     initScene(); 
+
+    // Inisialisasi post-processing setelah scene & renderer dibuat
     postProcessingEffects = initPostProcessing(renderer, scene, camera);
 
     playerControlsInstance = setupPointerLockControls(camera, renderer.domElement, scene);
     if (!playerControlsInstance) {
+        console.error("Gagal menginisialisasi kontrol pemain.");
         displayErrorToUser("Gagal menginisialisasi kontrol pemain.");
         if (loadingScreenElement) loadingScreenElement.style.display = 'none';
         if (instructionsContainer) instructionsContainer.style.display = 'flex';
@@ -86,6 +103,8 @@ async function init() {
         const loadedResults = await Promise.all(loadPromises); 
         console.log("Semua model berhasil dimuat.");
 
+        // initInteractionHandler dipanggil SETELAH semua model dimuat
+        // agar referensi mesh untuk 'rotate_on_look' bisa ditemukan
         await initInteractionHandler(); 
 
         loadedResults.forEach(result => {

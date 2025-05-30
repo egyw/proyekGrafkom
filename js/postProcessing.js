@@ -10,26 +10,30 @@ let renderPass;
 let outputPass;
 
 export function initPostProcessing(renderer, scene, camera) {
-    
+    // Membuat EffectComposer
     composer = new EffectComposer(renderer);
-
+    
+    // RenderPass untuk merender scene normal
     renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
-
+    
+    // UnrealBloomPass untuk efek glow
     const bloomParams = {
-        threshold: 0.2,    
-        strength: 0.25,
-        radius: 0.7,         
-        exposure: 1           
+        threshold: 0.2,       // Intensitas minimum untuk menimbulkan glow (0-1)
+        strength: 0.25,        // Kekuatan glow (0-3)
+        radius: 0.7,          // Radius blur (0-1)
+        exposure: 1           // Exposure (0-2)
     };
     
     const bloomResolution = new THREE.Vector2(window.innerWidth, window.innerHeight);
     bloomPass = new UnrealBloomPass(bloomResolution, bloomParams.strength, bloomParams.radius, bloomParams.threshold);
     composer.addPass(bloomPass);
     
+    // OutputPass untuk hasil akhir
     outputPass = new OutputPass();
     composer.addPass(outputPass);
     
+    // Atur size jika jendela diresize
     window.addEventListener('resize', () => {
         const width = window.innerWidth;
         const height = window.innerHeight;
@@ -73,6 +77,7 @@ export function disposePostProcessing() {
     console.log("[PostProcessing] Efek post-processing dibersihkan");
 }
 
+// Fungsi untuk menyesuaikan parameter glow
 export function adjustBloomParameters(params = {}) {
     if (!bloomPass) return;
     

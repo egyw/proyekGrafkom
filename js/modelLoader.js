@@ -1,45 +1,34 @@
 // js/modelLoader.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { camera } from './sceneSetup.js';
+import { camera } from './sceneSetup.js'; // Untuk debug posisi jika masih diperlukan
 
 export const loadedModels = new Map();
-export const collidableMeshes = [];
-export const dynamicDoors = new Map();
+export const collidableMeshes = []; // Daftar global untuk semua mesh yang bisa ditabrak
+export const dynamicDoors = new Map(); // Key: doorWayMeshName dari config, Value: { doorMesh, interactionTargetMesh }
 
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
-let sharedDoorMaterial;
+let sharedDoorMaterial; // Material bersama untuk semua pintu dinamis
 
 async function initializeDoorMaterial(texturePath) {
     if (sharedDoorMaterial) return;
-    
+    console.log(`[MatInit] Mencoba inisialisasi material pintu dengan path: "${texturePath}"`);
     if (texturePath) {
         try {
             const texture = await textureLoader.loadAsync(texturePath);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
+            texture.wrapS = THREE.RepeatWrapping; texture.wrapT = THREE.RepeatWrapping;
             sharedDoorMaterial = new THREE.MeshStandardMaterial({
-                map: texture,
-                metalness: 0.7,
-                roughness: 0.5,
-                side: THREE.DoubleSide
+                map: texture, metalness: 0.7, roughness: 0.5, side: THREE.DoubleSide
             });
+            console.log("[MatInit] Tekstur pintu berhasil dimuat:", texturePath);
         } catch (error) {
-            sharedDoorMaterial = new THREE.MeshStandardMaterial({ 
-                color: 0x6c757d,
-                metalness: 0.8,
-                roughness: 0.4,
-                side: THREE.DoubleSide 
-            });
+            console.warn(`[MatInit] Gagal memuat tekstur pintu dari "${texturePath}". Menggunakan warna solid. Error:`, error.message);
+            sharedDoorMaterial = new THREE.MeshStandardMaterial({ color: 0x6c757d, metalness: 0.8, roughness: 0.4, side: THREE.DoubleSide });
         }
     } else {
-        sharedDoorMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x6c757d,
-            metalness: 0.8,
-            roughness: 0.4,
-            side: THREE.DoubleSide 
-        });
+        console.log("[MatInit] Tidak ada path tekstur pintu. Menggunakan warna solid.");
+        sharedDoorMaterial = new THREE.MeshStandardMaterial({ color: 0x6c757d, metalness: 0.8, roughness: 0.4, side: THREE.DoubleSide });
     }
 }
 
@@ -50,78 +39,91 @@ export async function loadGLBModel(modelConfig, scene) {
     }
 
     return new Promise((resolve, reject) => {
-        gltfLoader.load(
-            modelConfig.path,
-            (gltf) => {
-                const model = gltf.scene;
-                model.name = modelConfig.id;
-                
-                if (modelConfig.position) model.position.set(...modelConfig.position);
-                if (modelConfig.rotation) model.rotation.set(...modelConfig.rotation.map(THREE.MathUtils.degToRad));
-                if (modelConfig.scale) model.scale.set(...modelConfig.scale);
-                
-                let mixer = null;
-                if (gltf.animations && gltf.animations.length > 0) {
-                    mixer = new THREE.AnimationMixer(model);
-                }
+        gltfLoader.load( modelConfig.path, (gltf) => {
+            const model = gltf.scene; model.name = modelConfig.id;
+            if (modelConfig.position) model.position.set(...modelConfig.position);
+            if (modelConfig.rotation) model.rotation.set(...modelConfig.rotation.map(THREE.MathUtils.degToRad));
+            if (modelConfig.scale) model.scale.set(...modelConfig.scale);
+            let mixer = null; if (gltf.animations && gltf.animations.length > 0) mixer = new THREE.AnimationMixer(model);
 
-                if (doorMainConfig && doorMainConfig.doorInstances && doorMainConfig.doorInstances.length > 0) {
-                    doorMainConfig.doorInstances.forEach(doorInstanceConfig => {
-                        const doorWayNameKey = doorInstanceConfig.doorWayMeshName;
-                        if (!doorWayNameKey) return;
-                        const fullDoorSetup = { ...doorMainConfig, ...doorInstanceConfig };
-                        createDynamicDoor(doorWayNameKey, fullDoorSetup, scene);
-                    });
-                }
+            // Proses pembuatan pintu dinamis terlebih dahulu
+            if (doorMainConfig && doorMainConfig.doorInstances && doorMainConfig.doorInstances.length > 0) {
+                console.log(`[ModelLoader] Akan membuat pintu dinamis berdasarkan ${doorMainConfig.doorInstances.length} instance dari config.`);
+                doorMainConfig.doorInstances.forEach(doorInstanceConfig => {
+                    const doorWayNameKey = doorInstanceConfig.doorWayMeshName;
+                    if (!doorWayNameKey) {
+                        console.error("[ModelLoader] KRITIS: doorInstanceConfig tidak memiliki doorWayMeshName!", doorInstanceConfig);
+                        return;
+                    }
+                    console.log(`[ModelLoader] Memproses instance pintu untuk kunci: ${doorWayNameKey}`);
+                    const fullDoorSetup = { ...doorMainConfig, ...doorInstanceConfig };
+                    // createDynamicDoor akan menangani penambahan pintu fisik ke collidableMeshes global
+                    createDynamicDoor(doorWayNameKey, fullDoorSetup, scene);
+                });
+            } else if (doorMainConfig) {
+                console.warn("[ModelLoader] Konfigurasi pintu dinamis ada, tapi 'doorInstances' kosong atau tidak ada di config.js.");
+            }
 
-                model.traverse((child) => {
-                    if (child.isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
+            // Traverse SEMUA mesh di model GLB untuk setup umum dan collidables
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
 
-                        let isGeneratedDynamicDoor = false;
-                        dynamicDoors.forEach(doorSystem => {
-                            if (doorSystem.doorMesh === child || doorSystem.interactionTargetMesh === child) {
-                                isGeneratedDynamicDoor = true;
-                            }
-                        });
-
-                        if (child.material && !isGeneratedDynamicDoor) {
-                            const applyMaterialTweaksToGLBMesh = (material, meshNode) => {
-                                material.side = modelConfig.doubleSidedMeshNames?.includes(meshNode.name) 
-                                    ? THREE.DoubleSide 
-                                    : THREE.FrontSide;
-                                material.transparent = false;
-                                material.depthWrite = true;
-                                material.blending = THREE.NormalBlending;
-                            };
-
-                            if (Array.isArray(child.material)) {
-                                child.material.forEach(mat => applyMaterialTweaksToGLBMesh(mat, child));
-                            } else {
-                                applyMaterialTweaksToGLBMesh(child.material, child);
-                            }
+                    // Cek apakah mesh ini adalah pintu yang sudah dibuat secara dinamis
+                    let isGeneratedDynamicDoor = false;
+                    dynamicDoors.forEach(doorSystem => {
+                        if (doorSystem.doorMesh === child || doorSystem.interactionTargetMesh === child) {
+                            isGeneratedDynamicDoor = true;
                         }
+                    });
 
-                        let isInteractionTarget = false;
-                        dynamicDoors.forEach(doorSystem => {
-                            if (doorSystem.interactionTargetMesh === child) {
-                                isInteractionTarget = true;
+                    // Terapkan pengaturan material HANYA jika ini BUKAN pintu dinamis yang sudah kita buat
+                    // (karena pintu dinamis sudah punya material sendiri dari sharedDoorMaterial)
+                    if (child.material && !isGeneratedDynamicDoor) {
+                        const applyMaterialTweaksToGLBMesh = (material, meshNode) => {
+                            if (modelConfig.doubleSidedMeshNames && modelConfig.doubleSidedMeshNames.includes(meshNode.name)) {
+                                material.side = THREE.DoubleSide;
+                            } else {
+                                material.side = THREE.FrontSide; // Penting: Atur FrontSide untuk mesh non-DoubleSided
                             }
-                        });
+                            // Atur ulang properti material standar untuk mesh GLB
+                            material.transparent = false;
+                            material.depthWrite = true;
+                            material.blending = THREE.NormalBlending;
+                        };
 
-                        if (!isInteractionTarget && !collidableMeshes.find(m => m.uuid === child.uuid)) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(mat => applyMaterialTweaksToGLBMesh(mat, child));
+                        } else {
+                            applyMaterialTweaksToGLBMesh(child.material, child);
+                        }
+                    }
+
+                    // Tambahkan ke collidableMeshes jika BUKAN target interaksi pintu (yang tidak perlu ditabrak)
+                    // dan belum ada di daftar. Pintu fisik sudah ditambahkan oleh createDynamicDoor.
+                    let isInteractionTarget = false;
+                     dynamicDoors.forEach(doorSystem => {
+                        if (doorSystem.interactionTargetMesh === child) {
+                            isInteractionTarget = true;
+                        }
+                    });
+
+                    if (!isInteractionTarget) {
+                        // Hanya tambahkan jika bukan interaction target dan belum ada
+                         if (!collidableMeshes.find(m => m.uuid === child.uuid)) {
                             collidableMeshes.push(child);
                         }
                     }
-                });
+                }
+            });
 
-                scene.add(model);
-                loadedModels.set(modelConfig.id, { model, mixer, animations: gltf.animations, gltf });
-                resolve({ model, mixer, animations: gltf.animations });
-            },
-            undefined,
-            reject
+            scene.add(model); // Tambahkan model utama (yang mungkin berisi kusen-kusen asli)
+            loadedModels.set(modelConfig.id, { model, mixer, animations: gltf.animations, gltf });
+            console.log(`[ModelLoader] Model "${modelConfig.id}" dimuat. Total Collidables: ${collidableMeshes.length}. Pintu dinamis dibuat: ${dynamicDoors.size}.`);
+            resolve({ model, mixer, animations: gltf.animations });
+        },
+        undefined, (error) => { console.error(`[ModelLoader] Error memuat GLB ${modelConfig.path}:`, error); reject(error); }
         );
     });
 }
